@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { divisions, searchAgents, getTotalAgentCount, getDivisionById, getAgentById } from "@/lib/agent-data";
 import type { Division, Agent } from "@/lib/agent-data";
@@ -100,16 +100,25 @@ function AnimatedBackground() {
 // FLOATING PARTICLES
 // ============================================
 function FloatingParticles() {
-  const particles = useMemo(() => 
-    Array.from({ length: 30 }, (_, i) => ({
-      id: i,
-      left: `${Math.random() * 100}%`,
-      size: Math.random() * 3 + 1,
-      duration: Math.random() * 15 + 10,
-      delay: Math.random() * 10,
-      opacity: Math.random() * 0.3 + 0.1,
-    })),
-  []);
+  const [particles, setParticles] = useState<Array<{
+    id: number; left: string; size: number; duration: number; delay: number; opacity: number;
+  }>>([]);
+
+  useEffect(() => {
+    // Generate particles only on client to avoid hydration mismatch
+    setParticles(
+      Array.from({ length: 30 }, (_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}%`,
+        size: Math.random() * 3 + 1,
+        duration: Math.random() * 15 + 10,
+        delay: Math.random() * 10,
+        opacity: Math.random() * 0.3 + 0.1,
+      }))
+    );
+  }, []);
+
+  if (particles.length === 0) return null;
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
