@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
+import { getZaiClient } from "@/lib/zai";
 
 interface ChatMessageInput {
   role: string;
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Messages are required" }, { status: 400 });
     }
 
-    const zai = await ZAI.create();
+    const zai = await getZaiClient();
 
     const systemPrompt = `You are ${agentName}, an AI specialist agent from Eighty Seven AI.
 

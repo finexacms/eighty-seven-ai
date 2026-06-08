@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
+import { getZaiClient } from "@/lib/zai";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    const zai = await ZAI.create();
+    const zai = await getZaiClient();
 
     const systemPrompt = `You are a Full Stack Developer AI agent. Your job is to generate complete, working web application code.
 
