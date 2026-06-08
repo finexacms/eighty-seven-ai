@@ -57,7 +57,7 @@ Return ONLY the raw HTML code. No markdown, no code fences, no explanation — j
         { role: "user", content: userMessage },
       ],
       temperature: 0.7,
-      max_tokens: 16384,
+      max_tokens: 65536,
     });
 
     let code = completion.choices[0]?.message?.content || "";

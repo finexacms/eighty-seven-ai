@@ -103,7 +103,7 @@ ${webSearch ? `- Web search is ENABLED. When you have search results, incorporat
         try {
           const searchResults = await zai.functions.invoke("web_search", {
             query: lastUserMsg.content.trim(),
-            num: 5,
+            num: 10,
           });
 
           if (Array.isArray(searchResults) && searchResults.length > 0) {
@@ -131,9 +131,9 @@ ${webSearch ? `- Web search is ENABLED. When you have search results, incorporat
       }
     }
 
-    // Trim chat history to last 20 messages to stay within context limits
-    // Always keep system prompt + last 20 messages (user/assistant)
-    const MAX_HISTORY = 20;
+    // UNLIMITED for now — will add limits when going paid
+    // Keep last 50 messages for long conversations
+    const MAX_HISTORY = 50;
     const trimmedMessages = chatMessages.length > MAX_HISTORY + 1
       ? [chatMessages[0], ...chatMessages.slice(-(MAX_HISTORY))]
       : chatMessages;
@@ -141,7 +141,7 @@ ${webSearch ? `- Web search is ENABLED. When you have search results, incorporat
     const completion = await zai.chat.completions.create({
       messages: trimmedMessages as Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
       temperature: 0.7,
-      max_tokens: 8192,
+      max_tokens: 32768,
     });
 
     let reply = completion.choices[0]?.message?.content || "I'm here to help! Could you rephrase your question?";
