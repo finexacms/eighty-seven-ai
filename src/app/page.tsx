@@ -12,7 +12,8 @@ import {
   ChevronRight, Users, Zap, Shield, Globe,
   MessageSquare, ArrowRight, Loader2, Activity,
   Terminal, Cpu, Layers, Rocket, Eye, Code2,
-  Palette, Target, TrendingUp, Star, Hexagon
+  Palette, Target, TrendingUp, Star, Hexagon,
+  Paperclip, X, FileText, Image as ImageIcon, FileCode2, File
 } from "lucide-react";
 
 // ============================================
@@ -20,9 +21,75 @@ import {
 // ============================================
 type View = "home" | "division" | "agent" | "workspace";
 
+interface FileAttachment {
+  id: string;
+  name: string;
+  type: "image" | "document" | "code";
+  data: string; // base64 for images, text for docs/code
+  mimeType: string;
+  preview?: string; // for image thumbnails
+  size: number;
+}
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  files?: FileAttachment[];
+}
+
+// Supported file types
+const SUPPORTED_FILE_TYPES: Record<string, { category: "image" | "document" | "code"; mimeType: string }> = {
+  // Images
+  "image/png": { category: "image", mimeType: "image/png" },
+  "image/jpeg": { category: "image", mimeType: "image/jpeg" },
+  "image/jpg": { category: "image", mimeType: "image/jpeg" },
+  "image/gif": { category: "image", mimeType: "image/gif" },
+  "image/webp": { category: "image", mimeType: "image/webp" },
+  "image/svg+xml": { category: "image", mimeType: "image/svg+xml" },
+  // Documents
+  "text/plain": { category: "document", mimeType: "text/plain" },
+  "text/csv": { category: "document", mimeType: "text/csv" },
+  "text/markdown": { category: "document", mimeType: "text/markdown" },
+  "application/json": { category: "document", mimeType: "application/json" },
+  "application/pdf": { category: "document", mimeType: "application/pdf" },
+  // Code
+  "text/javascript": { category: "code", mimeType: "text/javascript" },
+  "text/typescript": { category: "code", mimeType: "text/typescript" },
+  "text/html": { category: "code", mimeType: "text/html" },
+  "text/css": { category: "code", mimeType: "text/css" },
+  "text/xml": { category: "code", mimeType: "text/xml" },
+  "text/yaml": { category: "code", mimeType: "text/yaml" },
+  "application/javascript": { category: "code", mimeType: "application/javascript" },
+  "application/xml": { category: "code", mimeType: "application/xml" },
+};
+
+const CODE_EXTENSIONS: Record<string, string> = {
+  js: "text/javascript", jsx: "text/javascript", ts: "text/typescript", tsx: "text/typescript",
+  py: "text/plain", rb: "text/plain", java: "text/plain", go: "text/plain",
+  rs: "text/plain", cpp: "text/plain", c: "text/plain", h: "text/plain",
+  html: "text/html", css: "text/css", scss: "text/css", less: "text/css",
+  json: "application/json", xml: "text/xml", yaml: "text/yaml", yml: "text/yaml",
+  md: "text/markdown", txt: "text/plain", csv: "text/csv", sql: "text/plain",
+  sh: "text/plain", bash: "text/plain", env: "text/plain",
+  php: "text/plain", swift: "text/plain", kt: "text/plain", dart: "text/plain",
+  vue: "text/html", svelte: "text/html",
+};
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+function getFileCategory(fileName: string, mimeType: string): { category: "image" | "document" | "code"; mimeType: string } | null {
+  // Check by mime type first
+  if (SUPPORTED_FILE_TYPES[mimeType]) return SUPPORTED_FILE_TYPES[mimeType];
+  // Check by extension
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (ext && CODE_EXTENSIONS[ext]) {
+    return { category: "code", mimeType: CODE_EXTENSIONS[ext] };
+  }
+  // Check image mime type pattern
+  if (mimeType.startsWith("image/")) return { category: "image", mimeType };
+  // Check text mime pattern
+  if (mimeType.startsWith("text/")) return { category: "document", mimeType };
+  return null;
 }
 
 // ============================================
@@ -946,7 +1013,64 @@ function AgentDetailPage({ division, agent, onEnterWorkspace }: {
 }
 
 // ============================================
-// AGENT WORKSPACE (Chat)
+// FILE ATTACHMENT PREVIEW
+// ============================================
+function FileAttachmentPreview({ file, onRemove, styles }: { 
+  file: FileAttachment; 
+  onRemove?: () => void;
+  styles: { colors: [string, string]; glow: string };
+}) {
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getIcon = () => {
+    switch (file.type) {
+      case "image": return <ImageIcon className="h-4 w-4" />;
+      case "code": return <FileCode2 className="h-4 w-4" />;
+      case "document": return <FileText className="h-4 w-4" />;
+      default: return <File className="h-4 w-4" />;
+    }
+  };
+
+  return (
+    <motion.div 
+      className="relative group glass-card rounded-xl p-2.5 pr-9 flex items-center gap-2.5 max-w-[200px]"
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      style={{ borderColor: `${styles.colors[0]}30` }}
+    >
+      {/* Image thumbnail or file icon */}
+      {file.type === "image" && file.preview ? (
+        <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0">
+          <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${styles.colors[0]}15`, color: styles.colors[0] }}>
+          {getIcon()}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-medium truncate">{file.name}</p>
+        <p className="text-[10px] text-muted-foreground">{formatSize(file.size)}</p>
+      </div>
+      {onRemove && (
+        <button 
+          onClick={onRemove}
+          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+        >
+          <X className="h-3 w-3 text-white" />
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+// ============================================
+// AGENT WORKSPACE (Chat) — WITH FILE SHARING
 // ============================================
 function AgentWorkspace({ division, agent }: { 
   division: Division; 
@@ -955,13 +1079,17 @@ function AgentWorkspace({ division, agent }: {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: `Hello! I'm **${agent.name}** ${agent.emoji} from the ${division.name} Division.\n\n${agent.personality}\n\nI specialize in: ${agent.specialty}\n\nHow can I help you today?`,
+      content: `Hello! I'm **${agent.name}** ${agent.emoji} from the ${division.name} Division.\n\n${agent.personality}\n\nI specialize in: ${agent.specialty}\n\nYou can share files with me — images, code, documents — and I'll analyze them for you!\n\nHow can I help you today?`,
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const styles = getDivisionStyle(division.id);
 
   useEffect(() => {
@@ -970,12 +1098,101 @@ function AgentWorkspace({ division, agent }: {
     }
   }, [messages]);
 
+  const processFile = useCallback((file: globalThis.File): Promise<FileAttachment | null> => {
+    return new Promise((resolve) => {
+      if (file.size > MAX_FILE_SIZE) {
+        setFileError(`File "${file.name}" is too large. Max 10MB.`);
+        resolve(null);
+        return;
+      }
+
+      const fileInfo = getFileCategory(file.name, file.type);
+      if (!fileInfo) {
+        setFileError(`File type "${file.name}" is not supported.`);
+        resolve(null);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        const attachment: FileAttachment = {
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: file.name,
+          type: fileInfo.category,
+          data: fileInfo.category === "image" ? result : result.split(",")[1] || result,
+          mimeType: fileInfo.mimeType,
+          preview: fileInfo.category === "image" ? result : undefined,
+          size: file.size,
+        };
+        resolve(attachment);
+      };
+      reader.onerror = () => {
+        setFileError(`Failed to read file "${file.name}".`);
+        resolve(null);
+      };
+
+      if (fileInfo.category === "image") {
+        reader.readAsDataURL(file);
+      } else {
+        // For text-based files, read as text
+        reader.readAsDataURL(file);
+      }
+    });
+  }, []);
+
+  const handleFileSelect = useCallback(async (files: FileList | null) => {
+    if (!files) return;
+    setFileError(null);
+    
+    const newAttachments: FileAttachment[] = [];
+    for (let i = 0; i < Math.min(files.length, 5); i++) {
+      const att = await processFile(files[i]);
+      if (att) newAttachments.push(att);
+    }
+    
+    if (newAttachments.length > 0) {
+      setAttachments((prev) => [...prev, ...newAttachments].slice(0, 10)); // Max 10 attachments
+    }
+  }, [processFile]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    handleFileSelect(e.dataTransfer.files);
+  }, [handleFileSelect]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
   const sendMessage = useCallback(async () => {
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && attachments.length === 0) || isLoading) return;
 
     const userMessage = input.trim();
+    const userFiles = [...attachments];
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setAttachments([]);
+    setFileError(null);
+
+    setMessages((prev) => [
+      ...prev, 
+      { 
+        role: "user", 
+        content: userMessage || (userFiles.length > 0 ? `Shared ${userFiles.length} file(s)` : ""),
+        files: userFiles.length > 0 ? userFiles : undefined,
+      },
+    ]);
     setIsLoading(true);
 
     try {
@@ -983,9 +1200,24 @@ function AgentWorkspace({ division, agent }: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, { role: "user", content: userMessage }].map((m) => ({
+          messages: [...messages, { 
+            role: "user", 
+            content: userMessage || (userFiles.length > 0 ? `The user shared ${userFiles.length} file(s). Please analyze them.` : ""),
+            files: userFiles.map(f => ({
+              name: f.name,
+              type: f.type,
+              data: f.data,
+              mimeType: f.mimeType,
+            })),
+          }].map((m) => ({
             role: m.role,
             content: m.content,
+            files: m.files ? m.files.map(f => ({
+              name: f.name,
+              type: f.type,
+              data: f.data,
+              mimeType: f.mimeType,
+            })) : undefined,
           })),
           agentId: agent.id,
           agentName: agent.name,
@@ -1007,7 +1239,7 @@ function AgentWorkspace({ division, agent }: {
       setIsLoading(false);
       inputRef.current?.focus();
     }
-  }, [input, isLoading, messages, agent]);
+  }, [input, isLoading, messages, agent, attachments]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1023,6 +1255,8 @@ function AgentWorkspace({ division, agent }: {
           <strong className="font-semibold">{line.replace(/\*\*/g, '')}</strong>
         ) : line.startsWith('- ') ? (
           <span className="block pl-2">• {line.slice(2)}</span>
+        ) : line.startsWith('```') ? (
+          <code className="block bg-black/20 rounded px-2 py-1 text-xs font-mono my-1 overflow-x-auto">{line.replace(/```/g, '')}</code>
         ) : (
           <span>{line}</span>
         )}
@@ -1030,6 +1264,47 @@ function AgentWorkspace({ division, agent }: {
       </React.Fragment>
     ));
   };
+
+  const renderFileInMessage = (file: FileAttachment) => {
+    if (file.type === "image" && file.preview) {
+      return (
+        <motion.div 
+          key={file.id}
+          className="mb-2 rounded-xl overflow-hidden cursor-pointer group/img"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <img 
+            src={file.preview} 
+            alt={file.name}
+            className="max-w-full max-h-64 object-contain rounded-xl"
+          />
+          <div className="flex items-center gap-1.5 mt-1.5 opacity-70">
+            <ImageIcon className="h-3 w-3" />
+            <span className="text-[10px] truncate">{file.name}</span>
+          </div>
+        </motion.div>
+      );
+    }
+
+    // Code or document file
+    const icon = file.type === "code" ? <FileCode2 className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />;
+    return (
+      <motion.div 
+        key={file.id}
+        className="mb-2 flex items-center gap-2 rounded-lg px-3 py-2"
+        style={{ background: "rgba(0,0,0,0.15)" }}
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+      >
+        {icon}
+        <span className="text-xs truncate">{file.name}</span>
+      </motion.div>
+    );
+  };
+
+  const canSend = input.trim() || attachments.length > 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -1059,9 +1334,15 @@ function AgentWorkspace({ division, agent }: {
               Online — {agent.specialty.split(",")[0]}
             </div>
           </div>
-          <Badge variant="secondary" className="ml-auto text-xs shrink-0 glass-card border-white/10 gap-1.5">
-            {division.emoji} {division.name}
-          </Badge>
+          <div className="ml-auto flex items-center gap-2 shrink-0">
+            <Badge variant="secondary" className="text-[10px] glass-card border-white/10 gap-1 hidden sm:flex">
+              <Paperclip className="h-3 w-3" style={{ color: styles.colors[0] }} />
+              File sharing enabled
+            </Badge>
+            <Badge variant="secondary" className="text-xs glass-card border-white/10 gap-1.5">
+              {division.emoji} {division.name}
+            </Badge>
+          </div>
         </div>
       </motion.div>
 
@@ -1079,9 +1360,7 @@ function AgentWorkspace({ division, agent }: {
               >
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    msg.role === "user"
-                      ? "shadow-lg"
-                      : ""
+                    msg.role === "user" ? "shadow-lg" : ""
                   }`}
                   style={msg.role === "user" 
                     ? { background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` } 
@@ -1105,6 +1384,12 @@ function AgentWorkspace({ division, agent }: {
                     : {}
                   }
                 >
+                  {/* Render files if present */}
+                  {msg.files && msg.files.length > 0 && (
+                    <div className="mb-2 space-y-1.5">
+                      {msg.files.map((file) => renderFileInMessage(file))}
+                    </div>
+                  )}
                   <div className="whitespace-pre-wrap break-words">
                     {renderMessageContent(msg.content)}
                   </div>
@@ -1136,40 +1421,136 @@ function AgentWorkspace({ division, agent }: {
 
       {/* Input Area */}
       <motion.div 
-        className="border-t border-white/[0.06] glass px-4 py-4"
+        className="border-t border-white/[0.06] glass px-4 py-3"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <div className="max-w-4xl mx-auto flex gap-3">
-          <div className="flex-1 search-glow rounded-xl glass-strong transition-all duration-300">
-            <Input
-              ref={inputRef}
-              placeholder={`Ask ${agent.name} anything...`}
-              className="h-12 rounded-xl border-0 bg-transparent focus:ring-0 focus:outline-none placeholder:text-muted-foreground/50"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isLoading}
-            />
-          </div>
-          <motion.button
-            onClick={sendMessage}
-            disabled={!input.trim() || isLoading}
-            className="h-12 w-12 rounded-xl shrink-0 flex items-center justify-center text-white shadow-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
-            style={{ background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` }}
-            whileHover={{ 
-              scale: 1.05, 
-              boxShadow: `0 0 25px ${styles.glow}`,
-            }}
-            whileTap={{ scale: 0.95 }}
-          >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
+        <div className="max-w-4xl mx-auto">
+          {/* File Attachments Preview */}
+          <AnimatePresence>
+            {attachments.length > 0 && (
+              <motion.div 
+                className="flex flex-wrap gap-2 mb-3"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                {attachments.map((file) => (
+                  <FileAttachmentPreview 
+                    key={file.id} 
+                    file={file} 
+                    onRemove={() => removeAttachment(file.id)}
+                    styles={styles}
+                  />
+                ))}
+              </motion.div>
             )}
-          </motion.button>
+          </AnimatePresence>
+          
+          {/* File Error */}
+          <AnimatePresence>
+            {fileError && (
+              <motion.div 
+                className="mb-2 text-xs text-red-400 flex items-center gap-1.5"
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+              >
+                <X className="h-3 w-3" />
+                {fileError}
+                <button onClick={() => setFileError(null)} className="ml-1 underline hover:text-red-300">Dismiss</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Drag & Drop overlay */}
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            className={`relative rounded-xl transition-all duration-300 ${isDragOver ? "ring-2 scale-[1.01]" : ""}`}
+            style={isDragOver ? { ringColor: styles.colors[0], boxShadow: `0 0 30px ${styles.glow}`, background: `${styles.colors[0]}08` } : {}}
+          >
+            {isDragOver && (
+              <motion.div 
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-xl glass-strong"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              >
+                <div className="text-center">
+                  <Paperclip className="h-8 w-8 mx-auto mb-2" style={{ color: styles.colors[0] }} />
+                  <p className="text-sm font-medium">Drop files here</p>
+                  <p className="text-xs text-muted-foreground">Images, code, documents</p>
+                </div>
+              </motion.div>
+            )}
+            
+            <div className="flex gap-2.5">
+              {/* Attach File Button */}
+              <motion.button
+                onClick={() => fileInputRef.current?.click()}
+                className="h-12 w-12 rounded-xl shrink-0 flex items-center justify-center glass-card transition-all duration-300 hover:border-white/20"
+                style={{ borderColor: `${styles.colors[0]}20` }}
+                whileHover={{ scale: 1.05, borderColor: styles.colors[0] }}
+                whileTap={{ scale: 0.95 }}
+                title="Attach file"
+              >
+                <Paperclip className="h-5 w-5" style={{ color: styles.colors[0] }} />
+              </motion.button>
+              
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.js,.jsx,.ts,.tsx,.py,.java,.go,.rs,.cpp,.c,.html,.css,.scss,.json,.xml,.yaml,.yml,.md,.txt,.csv,.sql,.sh,.php,.swift,.kt,.dart,.vue,.svelte,.env"
+                className="hidden"
+                onChange={(e) => {
+                  handleFileSelect(e.target.files);
+                  // Reset input so same file can be selected again
+                  e.target.value = "";
+                }}
+              />
+              
+              <div className="flex-1 search-glow rounded-xl glass-strong transition-all duration-300">
+                <Input
+                  ref={inputRef}
+                  placeholder={attachments.length > 0 ? `Add a message with your file(s)...` : `Ask ${agent.name} anything or drop files...`}
+                  className="h-12 rounded-xl border-0 bg-transparent focus:ring-0 focus:outline-none placeholder:text-muted-foreground/50"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isLoading}
+                />
+              </div>
+              <motion.button
+                onClick={sendMessage}
+                disabled={!canSend || isLoading}
+                className="h-12 w-12 rounded-xl shrink-0 flex items-center justify-center text-white shadow-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+                style={{ background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` }}
+                whileHover={{ 
+                  scale: 1.05, 
+                  boxShadow: `0 0 25px ${styles.glow}`,
+                }}
+                whileTap={{ scale: 0.95 }}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </motion.button>
+            </div>
+          </div>
+
+          {/* File support hint */}
+          <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground/40">
+            <span className="flex items-center gap-1"><ImageIcon className="h-2.5 w-2.5" /> Images</span>
+            <span className="flex items-center gap-1"><FileCode2 className="h-2.5 w-2.5" /> Code</span>
+            <span className="flex items-center gap-1"><FileText className="h-2.5 w-2.5" /> Documents</span>
+            <span>Max 10MB per file</span>
+          </div>
         </div>
       </motion.div>
     </div>

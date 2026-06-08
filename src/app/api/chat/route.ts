@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
 
+interface ChatMessageInput {
+  role: string;
+  content: string;
+  files?: Array<{
+    name: string;
+    type: string; // "image" | "document" | "code"
+    data: string; // base64 for images, text content for docs/code
+    mimeType?: string;
+  }>;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { messages, agentId, agentName, agentPersonality, agentSpecialty } = await req.json();
@@ -25,18 +36,65 @@ Key behaviors:
 - Ask clarifying questions when needed
 - Use your unique personality and communication style
 - Focus on delivering real, measurable outcomes
-- Be concise but thorough`;
+- Be concise but thorough
+- When files or images are shared, analyze them carefully and provide detailed, helpful feedback
+- For images: describe what you see, analyze UI/UX if applicable, identify issues or improvements
+- For code files: review the code, suggest improvements, identify bugs, recommend best practices
+- For documents: summarize, analyze, and provide insights based on the content`;
 
+    // Build messages with file content support
     const chatMessages = [
       { role: "system" as const, content: systemPrompt },
-      ...messages.map((m: { role: string; content: string }) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
+      ...messages.map((m: ChatMessageInput) => {
+        // If message has image files, use multimodal content format
+        if (m.files && m.files.length > 0) {
+          const imageFiles = m.files.filter(f => f.type === "image");
+          const textFiles = m.files.filter(f => f.type !== "image");
+
+          // Build text content with file references
+          let textContent = m.content || "";
+          
+          // Add text/code file contents as context
+          for (const file of textFiles) {
+            textContent += `\n\n--- File: ${file.name} ---\n${file.data}\n--- End of ${file.name} ---`;
+          }
+
+          // If there are images, use multimodal format
+          if (imageFiles.length > 0) {
+            const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+            
+            if (textContent.trim()) {
+              contentParts.push({ type: "text", text: textContent });
+            }
+
+            for (const img of imageFiles) {
+              contentParts.push({
+                type: "image_url",
+                image_url: { url: img.data.startsWith("data:") ? img.data : `data:${img.mimeType || "image/png"};base64,${img.data}` },
+              });
+            }
+
+            return {
+              role: m.role as "user" | "assistant",
+              content: contentParts,
+            };
+          }
+
+          return {
+            role: m.role as "user" | "assistant",
+            content: textContent,
+          };
+        }
+
+        return {
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        };
+      }),
     ];
 
     const completion = await zai.chat.completions.create({
-      messages: chatMessages,
+      messages: chatMessages as Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
       temperature: 0.7,
       max_tokens: 2048,
     });
