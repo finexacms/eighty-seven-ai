@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
     const zai = await ZAI.create();
 
-    const systemPrompt = `You are ${agentName}, an AI specialist agent from The Agency.
+    const systemPrompt = `You are ${agentName}, an AI specialist agent from Eighty Seven AI.
 
 Your Personality: ${agentPersonality}
 

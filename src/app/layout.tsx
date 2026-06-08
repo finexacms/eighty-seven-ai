@@ -14,21 +14,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Agency — AI Specialists Hub",
+  title: "Eighty Seven AI — AI Specialists Hub",
   description: "232 specialized AI agents across 18 divisions. Each agent is a specialized expert with personality, processes, and proven deliverables.",
   keywords: ["AI Agency", "AI Agents", "Specialized AI", "Automation", "AI Development"],
-  authors: [{ name: "The Agency" }],
+  authors: [{ name: "Eighty Seven AI" }],
   icons: {
     icon: "/logo.svg",
   },
   openGraph: {
-    title: "The Agency — AI Specialists Hub",
+    title: "Eighty Seven AI — AI Specialists Hub",
     description: "232 specialized AI agents across 18 divisions",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "The Agency — AI Specialists Hub",
+    title: "Eighty Seven AI — AI Specialists Hub",
     description: "232 specialized AI agents across 18 divisions",
   },
 };

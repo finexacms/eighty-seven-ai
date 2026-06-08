@@ -288,7 +288,7 @@ function Header({ view, onBack, title, subtitle, divisionId }: {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
               >
-                <span className="neon-text">The Agency</span>
+                <span className="neon-text">Eighty Seven AI</span>
               </motion.h1>
             )}
           </motion.div>
@@ -403,7 +403,7 @@ function HomePage({ onDivisionClick, onSearchSelect }: {
           transition={{ delay: 0.3, duration: 0.6 }}
         >
           <span className="bg-gradient-to-r from-violet-400 via-cyan-400 to-pink-400 bg-clip-text text-transparent animate-gradient-flow bg-[length:200%_200%]">
-            The Agency
+            Eighty Seven<span className="ml-3 text-[0.6em] font-bold align-super opacity-80">87</span> AI
           </span>
         </motion.h1>
         
@@ -1103,7 +1103,7 @@ function AgentWorkspace({ division, agent }: {
   const [githubOwner, setGithubOwner] = useState("");
   const [githubRepo, setGithubRepo] = useState("");
   const [githubBranch, setGithubBranch] = useState("main");
-  const [githubCommitMsg, setGithubCommitMsg] = useState("feat: initial commit from The Agency AI");
+  const [githubCommitMsg, setGithubCommitMsg] = useState("feat: initial commit from Eighty Seven AI");
   const [isPushing, setIsPushing] = useState(false);
   const [pushResult, setPushResult] = useState<{ success: boolean; message: string; url?: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2112,11 +2112,11 @@ export default function AgencyPage() {
 
   const getTitle = () => {
     switch (view) {
-      case "home": return "The Agency";
+      case "home": return "Eighty Seven AI";
       case "division": return currentDivision ? `${currentDivision.emoji} ${currentDivision.name} Division` : "";
       case "agent": return currentAgent ? `${currentAgent.emoji} ${currentAgent.name}` : "";
       case "workspace": return currentAgent ? `Workspace: ${currentAgent.name}` : "";
-      default: return "The Agency";
+      default: return "Eighty Seven AI";
     }
   };
 
@@ -2213,7 +2213,7 @@ export default function AgencyPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-muted-foreground">
             <p className="flex items-center justify-center gap-2">
               <Sparkles className="h-3.5 w-3.5 text-violet-400" />
-              <span>The Agency — <AnimatedCounter target={getTotalAgentCount()} duration={1000} /> Specialized AI Agents across {divisions.length} Divisions</span>
+              <span>Eighty Seven AI — <AnimatedCounter target={getTotalAgentCount()} duration={1000} /> Specialized AI Agents across {divisions.length} Divisions</span>
             </p>
             <p className="mt-1.5 text-xs text-muted-foreground/50">Open Source • MIT License • Battle-Tested in Production</p>
           </div>

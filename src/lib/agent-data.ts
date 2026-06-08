@@ -1,5 +1,5 @@
 // ==========================================
-// THE AGENCY - AI Specialists Data
+// EIGHTY SEVEN AI - AI Specialists Data
 // 232 Agents across 16 Divisions
 // ==========================================
 
