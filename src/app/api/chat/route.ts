@@ -14,7 +14,7 @@ interface ChatMessageInput {
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, agentId, agentName, agentPersonality, agentSpecialty } = await req.json();
+    const { messages, agentId, agentName, agentPersonality, agentSpecialty, webSearch } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Messages are required" }, { status: 400 });
@@ -40,7 +40,8 @@ Key behaviors:
 - When files or images are shared, analyze them carefully and provide detailed, helpful feedback
 - For images: describe what you see, analyze UI/UX if applicable, identify issues or improvements
 - For code files: review the code, suggest improvements, identify bugs, recommend best practices
-- For documents: summarize, analyze, and provide insights based on the content`;
+- For documents: summarize, analyze, and provide insights based on the content
+${webSearch ? `- Web search is ENABLED. When you have search results, incorporate them naturally into your response. Always cite your sources by including the URL. Format links as [Source Name](URL). Be transparent about what information comes from search results versus your training data.` : ""}`;
 
     // Build messages with file content support
     const chatMessages = [
@@ -93,13 +94,55 @@ Key behaviors:
       }),
     ];
 
+    // Web search: if enabled, perform search and inject results
+    let searchContext = "";
+    if (webSearch) {
+      // Get the last user message for search query
+      const lastUserMsg = [...messages].reverse().find((m: ChatMessageInput) => m.role === "user");
+      if (lastUserMsg && lastUserMsg.content.trim()) {
+        try {
+          const searchResults = await zai.functions.invoke("web_search", {
+            query: lastUserMsg.content.trim(),
+            num: 5,
+          });
+
+          if (Array.isArray(searchResults) && searchResults.length > 0) {
+            searchContext = "\n\n--- Web Search Results ---\n" + 
+              searchResults.map((r: { name?: string; url?: string; snippet?: string; host_name?: string }, i: number) => 
+                `[${i + 1}] ${r.name || "Untitled"}\nURL: ${r.url || ""}\nSnippet: ${r.snippet || ""}\nSource: ${r.host_name || ""}`
+              ).join("\n\n") + 
+              "\n--- End of Search Results ---\n\nUse the above search results to answer the user's question. Cite sources as [Source Name](URL) when referencing information from the search results.";
+            
+            // Inject search results into the last user message
+            const lastMsg = chatMessages[chatMessages.length - 1];
+            if (typeof lastMsg.content === "string") {
+              lastMsg.content += searchContext;
+            } else if (Array.isArray(lastMsg.content)) {
+              const textPart = lastMsg.content.find((p: { type: string }) => p.type === "text");
+              if (textPart && textPart.text) {
+                textPart.text += searchContext;
+              }
+            }
+          }
+        } catch (searchError) {
+          console.error("Web search error:", searchError);
+          // Continue without search results — don't block the chat
+        }
+      }
+    }
+
     const completion = await zai.chat.completions.create({
       messages: chatMessages as Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
       temperature: 0.7,
       max_tokens: 2048,
     });
 
-    const reply = completion.choices[0]?.message?.content || "I'm here to help! Could you rephrase your question?";
+    let reply = completion.choices[0]?.message?.content || "I'm here to help! Could you rephrase your question?";
+    
+    // Add search indicator if web search was used and results were found
+    if (webSearch && searchContext) {
+      reply = reply + "\n\n---\n*🔍 Results enhanced with web search*";
+    }
 
     return NextResponse.json({ reply });
   } catch (error: unknown) {

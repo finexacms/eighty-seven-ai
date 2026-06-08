@@ -1087,6 +1087,8 @@ function AgentWorkspace({ division, agent }: {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1223,6 +1225,7 @@ function AgentWorkspace({ division, agent }: {
           agentName: agent.name,
           agentPersonality: agent.personality,
           agentSpecialty: agent.specialty,
+          webSearch: webSearchEnabled,
         }),
       });
 
@@ -1239,7 +1242,7 @@ function AgentWorkspace({ division, agent }: {
       setIsLoading(false);
       inputRef.current?.focus();
     }
-  }, [input, isLoading, messages, agent, attachments]);
+  }, [input, isLoading, messages, agent, attachments, webSearchEnabled]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1627,6 +1630,25 @@ function AgentWorkspace({ division, agent }: {
                 <Paperclip className="h-5 w-5" style={{ color: styles.colors[0] }} />
               </motion.button>
               
+              {/* Web Search Toggle */}
+              <motion.button
+                onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                className={`h-12 w-12 rounded-xl shrink-0 flex items-center justify-center transition-all duration-300 ${
+                  webSearchEnabled 
+                    ? "shadow-lg" 
+                    : "glass-card hover:border-white/20"
+                }`}
+                style={webSearchEnabled 
+                  ? { background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})`, boxShadow: `0 0 20px ${styles.glow}` }
+                  : { borderColor: `${styles.colors[0]}20` }
+                }
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title={webSearchEnabled ? "Web search ON — click to disable" : "Enable web search"}
+              >
+                <Globe className={`h-5 w-5 ${webSearchEnabled ? "text-white" : ""}`} style={!webSearchEnabled ? { color: styles.colors[0] } : {}} />
+              </motion.button>
+              
               {/* Hidden file input */}
               <input
                 ref={fileInputRef}
@@ -1678,6 +1700,10 @@ function AgentWorkspace({ division, agent }: {
             <span className="flex items-center gap-1"><FileCode2 className="h-2.5 w-2.5" /> Code</span>
             <span className="flex items-center gap-1"><FileText className="h-2.5 w-2.5" /> Documents</span>
             <span>Max 10MB per file</span>
+            <span className="flex items-center gap-1" style={{ color: webSearchEnabled ? styles.colors[0] : undefined }}>
+              <Globe className="h-2.5 w-2.5" /> 
+              {webSearchEnabled ? "Web search ON" : "Web search"}
+            </span>
           </div>
         </div>
       </motion.div>
