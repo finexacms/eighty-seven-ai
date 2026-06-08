@@ -13,7 +13,8 @@ import {
   MessageSquare, ArrowRight, Loader2, Activity,
   Terminal, Cpu, Layers, Rocket, Eye, Code2,
   Palette, Target, TrendingUp, Star, Hexagon,
-  Paperclip, X, FileText, Image as ImageIcon, FileCode2, File
+  Paperclip, X, FileText, Image as ImageIcon, FileCode2, File,
+  Monitor, GitBranch, RefreshCw, ExternalLink, Columns, Maximize2, Minimize2, Github
 } from "lucide-react";
 
 // ============================================
@@ -1076,10 +1077,13 @@ function AgentWorkspace({ division, agent }: {
   division: Division; 
   agent: Agent;
 }) {
+  const isFullStack = agent.id === "full-stack-developer";
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: `Hello! I'm **${agent.name}** ${agent.emoji} from the ${division.name} Division.\n\n${agent.personality}\n\nI specialize in: ${agent.specialty}\n\nYou can share files with me — images, code, documents — and I'll analyze them for you!\n\nHow can I help you today?`,
+      content: isFullStack 
+        ? `Hello! I'm **${agent.name}** ${agent.emoji} from the ${division.name} Division.\n\n${agent.personality}\n\nI can build **complete working websites** with:\n- **Frontend** — Beautiful, responsive UIs\n- **Backend** — API logic and server-side code\n- **Database** — Data models and storage\n\nJust describe what you want and I'll generate it with a **live preview**! You can also **push the code to GitHub** when you're happy.\n\nWhat would you like to build?`
+        : `Hello! I'm **${agent.name}** ${agent.emoji} from the ${division.name} Division.\n\n${agent.personality}\n\nI specialize in: ${agent.specialty}\n\nYou can share files with me — images, code, documents — and I'll analyze them for you!\n\nHow can I help you today?`,
     },
   ]);
   const [input, setInput] = useState("");
@@ -1089,6 +1093,19 @@ function AgentWorkspace({ division, agent }: {
   const [fileError, setFileError] = useState<string | null>(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  // Full Stack Developer states
+  const [previewCode, setPreviewCode] = useState<string>("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [previewExpanded, setPreviewExpanded] = useState(false);
+  const [showGithubModal, setShowGithubModal] = useState(false);
+  const [githubToken, setGithubToken] = useState("");
+  const [githubOwner, setGithubOwner] = useState("");
+  const [githubRepo, setGithubRepo] = useState("");
+  const [githubBranch, setGithubBranch] = useState("main");
+  const [githubCommitMsg, setGithubCommitMsg] = useState("feat: initial commit from The Agency AI");
+  const [isPushing, setIsPushing] = useState(false);
+  const [pushResult, setPushResult] = useState<{ success: boolean; message: string; url?: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1196,6 +1213,11 @@ function AgentWorkspace({ division, agent }: {
       },
     ]);
     setIsLoading(true);
+
+    // If full-stack developer, also generate code preview
+    if (isFullStack && userMessage.trim()) {
+      generateAndPreview(userMessage.trim());
+    }
 
     try {
       const res = await fetch("/api/chat", {
@@ -1435,13 +1457,73 @@ function AgentWorkspace({ division, agent }: {
     );
   };
 
+  // Full Stack Developer: Generate code and show preview
+  const generateAndPreview = useCallback(async (prompt: string) => {
+    if (!isFullStack) return;
+    setIsGenerating(true);
+    setShowPreview(true);
+    try {
+      const res = await fetch("/api/generate-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          currentCode: previewCode || undefined,
+          agentPersonality: agent.personality,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to generate code");
+      const data = await res.json();
+      if (data.code) {
+        setPreviewCode(data.code);
+      }
+    } catch (err) {
+      console.error("Code generation error:", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [isFullStack, previewCode, agent.personality]);
+
+  // GitHub push
+  const pushToGithub = useCallback(async () => {
+    if (!previewCode || !githubToken || !githubOwner || !githubRepo) return;
+    setIsPushing(true);
+    setPushResult(null);
+    try {
+      const res = await fetch("/api/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: githubToken,
+          owner: githubOwner,
+          repo: githubRepo,
+          branch: githubBranch,
+          commitMessage: githubCommitMsg,
+          files: [
+            { path: "index.html", content: previewCode },
+          ],
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPushResult({ success: true, message: data.message, url: data.commitUrl });
+      } else {
+        setPushResult({ success: false, message: data.error || "Push failed" });
+      }
+    } catch (err) {
+      setPushResult({ success: false, message: "Network error. Please try again." });
+    } finally {
+      setIsPushing(false);
+    }
+  }, [previewCode, githubToken, githubOwner, githubRepo, githubBranch, githubCommitMsg]);
+
   const canSend = input.trim() || attachments.length > 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Agent Info Bar */}
       <motion.div 
-        className="border-b border-white/[0.06] glass px-4 py-3"
+        className="border-b border-white/[0.06] glass px-4 py-3 shrink-0"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
@@ -1466,9 +1548,41 @@ function AgentWorkspace({ division, agent }: {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2 shrink-0">
+            {isFullStack && (
+              <>
+                <motion.button
+                  onClick={() => setShowPreview(!showPreview)}
+                  className={`h-8 px-3 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition-all duration-300 ${
+                    showPreview 
+                      ? "text-white shadow-lg" 
+                      : "glass-card border-white/10 hover:border-white/20 text-muted-foreground hover:text-white"
+                  }`}
+                  style={showPreview 
+                    ? { background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})`, boxShadow: `0 0 15px ${styles.glow}` }
+                    : {}
+                  }
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  <Monitor className="h-3.5 w-3.5" />
+                  {showPreview ? "Preview ON" : "Preview"}
+                </motion.button>
+                {previewCode && (
+                  <motion.button
+                    onClick={() => setShowGithubModal(true)}
+                    className="h-8 px-3 rounded-lg text-[11px] font-medium flex items-center gap-1.5 glass-card border-white/10 hover:border-white/20 text-muted-foreground hover:text-white transition-all duration-300"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    <GitBranch className="h-3.5 w-3.5" />
+                    Push to GitHub
+                  </motion.button>
+                )}
+              </>
+            )}
             <Badge variant="secondary" className="text-[10px] glass-card border-white/10 gap-1 hidden sm:flex">
               <Paperclip className="h-3 w-3" style={{ color: styles.colors[0] }} />
-              File sharing enabled
+              File sharing
             </Badge>
             <Badge variant="secondary" className="text-xs glass-card border-white/10 gap-1.5">
               {division.emoji} {division.name}
@@ -1477,9 +1591,13 @@ function AgentWorkspace({ division, agent }: {
         </div>
       </motion.div>
 
-      {/* Chat Messages */}
+      {/* Main Content: Chat + Preview Split */}
+      <div className={`flex-1 flex min-h-0 ${isFullStack && showPreview ? "flex-row" : "flex-col"}`}>
+        {/* Chat Panel */}
+        <div className={`flex flex-col min-h-0 ${isFullStack && showPreview ? "w-1/2 border-r border-white/[0.06]" : "flex-1"}`}>
+        {/* Chat Messages */}
       <ScrollArea className="flex-1 px-4">
-        <div className="max-w-4xl mx-auto py-6 space-y-5" ref={scrollRef}>
+        <div className={`mx-auto py-6 space-y-5 ${isFullStack && showPreview ? "" : "max-w-4xl"}`} ref={scrollRef}>
           <AnimatePresence initial={false}>
             {messages.map((msg, i) => (
               <motion.div
@@ -1707,6 +1825,224 @@ function AgentWorkspace({ division, agent }: {
           </div>
         </div>
       </motion.div>
+        </div>{/* End Chat Panel */}
+
+        {/* Live Preview Panel (Full Stack Developer only) */}
+        {isFullStack && showPreview && (
+          <motion.div 
+            className="w-1/2 flex flex-col min-h-0 bg-[#0d0d14]"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Preview Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06] shrink-0">
+              <div className="flex items-center gap-2">
+                <Monitor className="h-4 w-4" style={{ color: styles.colors[0] }} />
+                <span className="text-xs font-medium text-muted-foreground">Live Preview</span>
+                {isGenerating && (
+                  <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Generating...
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {previewCode && (
+                  <>
+                    <motion.button
+                      onClick={() => {
+                        const blob = new Blob([previewCode], { type: "text/html" });
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, "_blank");
+                      }}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center glass-card hover:bg-white/10 transition-all"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Open in new tab"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </motion.button>
+                    <motion.button
+                      onClick={() => setPreviewExpanded(!previewExpanded)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center glass-card hover:bg-white/10 transition-all"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title={previewExpanded ? "Collapse" : "Expand"}
+                    >
+                      {previewExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                    </motion.button>
+                    <motion.button
+                      onClick={() => generateAndPreview("")}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center glass-card hover:bg-white/10 transition-all"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      title="Refresh preview"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </motion.button>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            {/* Preview Content */}
+            <div className="flex-1 min-h-0 p-3">
+              {previewCode ? (
+                <div className="w-full h-full rounded-xl overflow-hidden border border-white/[0.06] shadow-2xl shadow-black/40">
+                  <iframe
+                    srcDoc={previewCode}
+                    className="w-full h-full bg-white"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                    title="Website Preview"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-full rounded-xl border border-white/[0.06] border-dashed flex flex-col items-center justify-center text-muted-foreground/40">
+                  <Monitor className="h-16 w-16 mb-4 opacity-20" />
+                  <p className="text-sm font-medium mb-1">No Preview Yet</p>
+                  <p className="text-xs text-center px-8">Describe your website idea in the chat and I'll generate a live preview for you!</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </div>{/* End Main Content Split */}
+
+      {/* GitHub Push Modal */}
+      <AnimatePresence>
+        {showGithubModal && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowGithubModal(false)} />
+            <motion.div
+              className="relative w-full max-w-md glass-strong rounded-2xl border border-white/10 shadow-2xl p-6"
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` }}>
+                    <Github className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm">Push to GitHub</h3>
+                    <p className="text-[11px] text-muted-foreground">Deploy your website code</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowGithubModal(false)} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] text-muted-foreground mb-1 block">Personal Access Token</label>
+                  <input
+                    type="password"
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    className="w-full h-10 px-3 rounded-xl glass-card border border-white/10 text-sm bg-transparent focus:outline-none focus:border-white/20"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">Owner</label>
+                    <input
+                      type="text"
+                      value={githubOwner}
+                      onChange={(e) => setGithubOwner(e.target.value)}
+                      placeholder="username"
+                      className="w-full h-10 px-3 rounded-xl glass-card border border-white/10 text-sm bg-transparent focus:outline-none focus:border-white/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">Repository</label>
+                    <input
+                      type="text"
+                      value={githubRepo}
+                      onChange={(e) => setGithubRepo(e.target.value)}
+                      placeholder="my-website"
+                      className="w-full h-10 px-3 rounded-xl glass-card border border-white/10 text-sm bg-transparent focus:outline-none focus:border-white/20"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">Branch</label>
+                    <input
+                      type="text"
+                      value={githubBranch}
+                      onChange={(e) => setGithubBranch(e.target.value)}
+                      placeholder="main"
+                      className="w-full h-10 px-3 rounded-xl glass-card border border-white/10 text-sm bg-transparent focus:outline-none focus:border-white/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">Commit Message</label>
+                    <input
+                      type="text"
+                      value={githubCommitMsg}
+                      onChange={(e) => setGithubCommitMsg(e.target.value)}
+                      placeholder="feat: initial commit"
+                      className="w-full h-10 px-3 rounded-xl glass-card border border-white/10 text-sm bg-transparent focus:outline-none focus:border-white/20"
+                    />
+                  </div>
+                </div>
+
+                {pushResult && (
+                  <motion.div
+                    className={`p-3 rounded-xl text-xs ${pushResult.success ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border border-red-500/20 text-red-400"}`}
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <div className="flex items-center gap-2">
+                      {pushResult.success ? <span>✅</span> : <span>❌</span>}
+                      <span>{pushResult.message}</span>
+                    </div>
+                    {pushResult.url && (
+                      <a href={pushResult.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 mt-1.5 text-cyan-400 hover:underline">
+                        <ExternalLink className="h-3 w-3" /> View commit on GitHub
+                      </a>
+                    )}
+                  </motion.div>
+                )}
+
+                <motion.button
+                  onClick={pushToGithub}
+                  disabled={isPushing || !githubToken || !githubOwner || !githubRepo}
+                  className="w-full h-11 rounded-xl text-white font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  style={{ background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` }}
+                  whileHover={{ scale: 1.02, boxShadow: `0 0 20px ${styles.glow}` }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {isPushing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Pushing to GitHub...
+                    </>
+                  ) : (
+                    <>
+                      <GitBranch className="h-4 w-4" />
+                      Push to GitHub
+                    </>
+                  )}
+                </motion.button>
+
+                <p className="text-[10px] text-muted-foreground/40 text-center">
+                  Your token is only used for this push and is never stored
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
