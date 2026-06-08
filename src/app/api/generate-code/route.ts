@@ -92,3 +92,6 @@ ${code}
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+// Increase timeout for code generation (can take up to 60s)
+export const maxDuration = 60;

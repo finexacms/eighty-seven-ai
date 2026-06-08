@@ -158,3 +158,6 @@ ${webSearch ? `- Web search is ENABLED. When you have search results, incorporat
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+// Increase timeout for chat with web search (can take up to 60s)
+export const maxDuration = 60;

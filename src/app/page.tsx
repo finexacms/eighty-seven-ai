@@ -1472,13 +1472,39 @@ function AgentWorkspace({ division, agent }: {
           agentPersonality: agent.personality,
         }),
       });
-      if (!res.ok) throw new Error("Failed to generate code");
       const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to generate code");
+      }
       if (data.code) {
         setPreviewCode(data.code);
       }
     } catch (err) {
       console.error("Code generation error:", err);
+      // Show error to user
+      setPreviewCode(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Error</title>
+  <style>
+    body { font-family: system-ui; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #1a1a2e; color: #eee; }
+    .error-box { background: #16213e; border: 1px solid #e94560; border-radius: 12px; padding: 40px; max-width: 600px; text-align: center; }
+    .error-box h2 { color: #e94560; margin-bottom: 16px; }
+    .error-box p { color: #aaa; line-height: 1.6; }
+    .retry-btn { margin-top: 20px; padding: 10px 24px; background: #0f3460; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; }
+    .retry-btn:hover { background: #533483; }
+  </style>
+</head>
+<body>
+  <div class="error-box">
+    <h2>Generation Failed</h2>
+    <p>${err instanceof Error ? err.message : "Unknown error occurred"}</p>
+    <button class="retry-btn" onclick="window.parent.postMessage('retry','*')">Try Again</button>
+  </div>
+</body>
+</html>`);
     } finally {
       setIsGenerating(false);
     }
