@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { divisions, searchAgents, getTotalAgentCount, getDivisionById, getAgentById } from "@/lib/agent-data";
 import type { Division, Agent } from "@/lib/agent-data";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Search, ArrowLeft, Send, Bot, User, Sparkles, 
   ChevronRight, Users, Zap, Shield, Globe,
-  MessageSquare, ArrowRight, Loader2
+  MessageSquare, ArrowRight, Loader2, Activity,
+  Terminal, Cpu, Layers, Rocket, Eye, Code2,
+  Palette, Target, TrendingUp, Star, Hexagon
 } from "lucide-react";
 
 // ============================================
@@ -25,27 +26,33 @@ interface ChatMessage {
 }
 
 // ============================================
-// DIVISION STYLE MAP (inline CSS for gradients)
+// DIVISION STYLE MAP
 // ============================================
-const divisionStyles: Record<string, { bg: React.CSSProperties; border: React.CSSProperties; icon: React.CSSProperties }> = {
-  engineering: { bg: { background: "linear-gradient(135deg, rgba(6,182,212,0.1), rgba(37,99,235,0.1))" }, border: { borderColor: "rgba(6,182,212,0.3)" }, icon: { background: "linear-gradient(135deg, #06b6d4, #2563eb)" } },
-  design: { bg: { background: "linear-gradient(135deg, rgba(236,72,153,0.1), rgba(225,29,72,0.1))" }, border: { borderColor: "rgba(236,72,153,0.3)" }, icon: { background: "linear-gradient(135deg, #ec4899, #e11d48)" } },
-  "paid-media": { bg: { background: "linear-gradient(135deg, rgba(245,158,11,0.1), rgba(234,88,12,0.1))" }, border: { borderColor: "rgba(245,158,11,0.3)" }, icon: { background: "linear-gradient(135deg, #f59e0b, #ea580c)" } },
-  sales: { bg: { background: "linear-gradient(135deg, rgba(16,185,129,0.1), rgba(22,163,74,0.1))" }, border: { borderColor: "rgba(16,185,129,0.3)" }, icon: { background: "linear-gradient(135deg, #10b981, #16a34a)" } },
-  marketing: { bg: { background: "linear-gradient(135deg, rgba(139,92,246,0.1), rgba(147,51,234,0.1))" }, border: { borderColor: "rgba(139,92,246,0.3)" }, icon: { background: "linear-gradient(135deg, #8b5cf6, #9333ea)" } },
-  product: { bg: { background: "linear-gradient(135deg, rgba(20,184,166,0.1), rgba(6,182,212,0.1))" }, border: { borderColor: "rgba(20,184,166,0.3)" }, icon: { background: "linear-gradient(135deg, #14b8a6, #06b6d4)" } },
-  "project-management": { bg: { background: "linear-gradient(135deg, rgba(14,165,233,0.1), rgba(79,70,229,0.1))" }, border: { borderColor: "rgba(14,165,233,0.3)" }, icon: { background: "linear-gradient(135deg, #0ea5e9, #4f46e5)" } },
-  testing: { bg: { background: "linear-gradient(135deg, rgba(239,68,68,0.1), rgba(225,29,72,0.1))" }, border: { borderColor: "rgba(239,68,68,0.3)" }, icon: { background: "linear-gradient(135deg, #ef4444, #e11d48)" } },
-  security: { bg: { background: "linear-gradient(135deg, rgba(220,38,38,0.1), rgba(153,27,27,0.1))" }, border: { borderColor: "rgba(220,38,38,0.3)" }, icon: { background: "linear-gradient(135deg, #dc2626, #991b1b)" } },
-  support: { bg: { background: "linear-gradient(135deg, rgba(234,179,8,0.1), rgba(217,119,6,0.1))" }, border: { borderColor: "rgba(234,179,8,0.3)" }, icon: { background: "linear-gradient(135deg, #eab308, #d97706)" } },
-  "spatial-computing": { bg: { background: "linear-gradient(135deg, rgba(217,70,239,0.1), rgba(236,72,153,0.1))" }, border: { borderColor: "rgba(217,70,239,0.3)" }, icon: { background: "linear-gradient(135deg, #d946ef, #ec4899)" } },
-  "game-development": { bg: { background: "linear-gradient(135deg, rgba(132,204,22,0.1), rgba(22,163,74,0.1))" }, border: { borderColor: "rgba(132,204,22,0.3)" }, icon: { background: "linear-gradient(135deg, #84cc16, #16a34a)" } },
-  academic: { bg: { background: "linear-gradient(135deg, rgba(120,113,108,0.1), rgba(68,64,60,0.1))" }, border: { borderColor: "rgba(120,113,108,0.3)" }, icon: { background: "linear-gradient(135deg, #78716c, #44403c)" } },
-  gis: { bg: { background: "linear-gradient(135deg, rgba(22,163,74,0.1), rgba(4,120,87,0.1))" }, border: { borderColor: "rgba(22,163,74,0.3)" }, icon: { background: "linear-gradient(135deg, #16a34a, #047857)" } },
-  finance: { bg: { background: "linear-gradient(135deg, rgba(5,150,105,0.1), rgba(13,148,136,0.1))" }, border: { borderColor: "rgba(5,150,105,0.3)" }, icon: { background: "linear-gradient(135deg, #059669, #0d9488)" } },
-  specialized: { bg: { background: "linear-gradient(135deg, rgba(249,115,22,0.1), rgba(220,38,38,0.1))" }, border: { borderColor: "rgba(249,115,22,0.3)" }, icon: { background: "linear-gradient(135deg, #f97316, #dc2626)" } },
-  strategy: { bg: { background: "linear-gradient(135deg, rgba(100,116,139,0.1), rgba(51,65,85,0.1))" }, border: { borderColor: "rgba(100,116,139,0.3)" }, icon: { background: "linear-gradient(135deg, #64748b, #334155)" } },
-  integrations: { bg: { background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(79,70,229,0.1))" }, border: { borderColor: "rgba(59,130,246,0.3)" }, icon: { background: "linear-gradient(135deg, #3b82f6, #4f46e5)" } },
+const divisionStyles: Record<string, { 
+  bg: React.CSSProperties; 
+  border: React.CSSProperties; 
+  icon: React.CSSProperties;
+  glow: string;
+  colors: [string, string];
+}> = {
+  engineering: { bg: { background: "linear-gradient(135deg, rgba(6,182,212,0.08), rgba(37,99,235,0.08))" }, border: { borderColor: "rgba(6,182,212,0.2)" }, icon: { background: "linear-gradient(135deg, #06b6d4, #2563eb)" }, glow: "rgba(6,182,212,0.4)", colors: ["#06b6d4", "#2563eb"] },
+  design: { bg: { background: "linear-gradient(135deg, rgba(236,72,153,0.08), rgba(225,29,72,0.08))" }, border: { borderColor: "rgba(236,72,153,0.2)" }, icon: { background: "linear-gradient(135deg, #ec4899, #e11d48)" }, glow: "rgba(236,72,153,0.4)", colors: ["#ec4899", "#e11d48"] },
+  "paid-media": { bg: { background: "linear-gradient(135deg, rgba(245,158,11,0.08), rgba(234,88,12,0.08))" }, border: { borderColor: "rgba(245,158,11,0.2)" }, icon: { background: "linear-gradient(135deg, #f59e0b, #ea580c)" }, glow: "rgba(245,158,11,0.4)", colors: ["#f59e0b", "#ea580c"] },
+  sales: { bg: { background: "linear-gradient(135deg, rgba(16,185,129,0.08), rgba(22,163,74,0.08))" }, border: { borderColor: "rgba(16,185,129,0.2)" }, icon: { background: "linear-gradient(135deg, #10b981, #16a34a)" }, glow: "rgba(16,185,129,0.4)", colors: ["#10b981", "#16a34a"] },
+  marketing: { bg: { background: "linear-gradient(135deg, rgba(139,92,246,0.08), rgba(147,51,234,0.08))" }, border: { borderColor: "rgba(139,92,246,0.2)" }, icon: { background: "linear-gradient(135deg, #8b5cf6, #9333ea)" }, glow: "rgba(139,92,246,0.4)", colors: ["#8b5cf6", "#9333ea"] },
+  product: { bg: { background: "linear-gradient(135deg, rgba(20,184,166,0.08), rgba(6,182,212,0.08))" }, border: { borderColor: "rgba(20,184,166,0.2)" }, icon: { background: "linear-gradient(135deg, #14b8a6, #06b6d4)" }, glow: "rgba(20,184,166,0.4)", colors: ["#14b8a6", "#06b6d4"] },
+  "project-management": { bg: { background: "linear-gradient(135deg, rgba(14,165,233,0.08), rgba(79,70,229,0.08))" }, border: { borderColor: "rgba(14,165,233,0.2)" }, icon: { background: "linear-gradient(135deg, #0ea5e9, #4f46e5)" }, glow: "rgba(14,165,233,0.4)", colors: ["#0ea5e9", "#4f46e5"] },
+  testing: { bg: { background: "linear-gradient(135deg, rgba(239,68,68,0.08), rgba(225,29,72,0.08))" }, border: { borderColor: "rgba(239,68,68,0.2)" }, icon: { background: "linear-gradient(135deg, #ef4444, #e11d48)" }, glow: "rgba(239,68,68,0.4)", colors: ["#ef4444", "#e11d48"] },
+  security: { bg: { background: "linear-gradient(135deg, rgba(220,38,38,0.08), rgba(153,27,27,0.08))" }, border: { borderColor: "rgba(220,38,38,0.2)" }, icon: { background: "linear-gradient(135deg, #dc2626, #991b1b)" }, glow: "rgba(220,38,38,0.4)", colors: ["#dc2626", "#991b1b"] },
+  support: { bg: { background: "linear-gradient(135deg, rgba(234,179,8,0.08), rgba(217,119,6,0.08))" }, border: { borderColor: "rgba(234,179,8,0.2)" }, icon: { background: "linear-gradient(135deg, #eab308, #d97706)" }, glow: "rgba(234,179,8,0.4)", colors: ["#eab308", "#d97706"] },
+  "spatial-computing": { bg: { background: "linear-gradient(135deg, rgba(217,70,239,0.08), rgba(236,72,153,0.08))" }, border: { borderColor: "rgba(217,70,239,0.2)" }, icon: { background: "linear-gradient(135deg, #d946ef, #ec4899)" }, glow: "rgba(217,70,239,0.4)", colors: ["#d946ef", "#ec4899"] },
+  "game-development": { bg: { background: "linear-gradient(135deg, rgba(132,204,22,0.08), rgba(22,163,74,0.08))" }, border: { borderColor: "rgba(132,204,22,0.2)" }, icon: { background: "linear-gradient(135deg, #84cc16, #16a34a)" }, glow: "rgba(132,204,22,0.4)", colors: ["#84cc16", "#16a34a"] },
+  academic: { bg: { background: "linear-gradient(135deg, rgba(120,113,108,0.08), rgba(68,64,60,0.08))" }, border: { borderColor: "rgba(120,113,108,0.2)" }, icon: { background: "linear-gradient(135deg, #78716c, #44403c)" }, glow: "rgba(120,113,108,0.4)", colors: ["#78716c", "#44403c"] },
+  gis: { bg: { background: "linear-gradient(135deg, rgba(22,163,74,0.08), rgba(4,120,87,0.08))" }, border: { borderColor: "rgba(22,163,74,0.2)" }, icon: { background: "linear-gradient(135deg, #16a34a, #047857)" }, glow: "rgba(22,163,74,0.4)", colors: ["#16a34a", "#047857"] },
+  finance: { bg: { background: "linear-gradient(135deg, rgba(5,150,105,0.08), rgba(13,148,136,0.08))" }, border: { borderColor: "rgba(5,150,105,0.2)" }, icon: { background: "linear-gradient(135deg, #059669, #0d9488)" }, glow: "rgba(5,150,105,0.4)", colors: ["#059669", "#0d9488"] },
+  specialized: { bg: { background: "linear-gradient(135deg, rgba(249,115,22,0.08), rgba(220,38,38,0.08))" }, border: { borderColor: "rgba(249,115,22,0.2)" }, icon: { background: "linear-gradient(135deg, #f97316, #dc2626)" }, glow: "rgba(249,115,22,0.4)", colors: ["#f97316", "#dc2626"] },
+  strategy: { bg: { background: "linear-gradient(135deg, rgba(100,116,139,0.08), rgba(51,65,85,0.08))" }, border: { borderColor: "rgba(100,116,139,0.2)" }, icon: { background: "linear-gradient(135deg, #64748b, #334155)" }, glow: "rgba(100,116,139,0.4)", colors: ["#64748b", "#334155"] },
+  integrations: { bg: { background: "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(79,70,229,0.08))" }, border: { borderColor: "rgba(59,130,246,0.2)" }, icon: { background: "linear-gradient(135deg, #3b82f6, #4f46e5)" }, glow: "rgba(59,130,246,0.4)", colors: ["#3b82f6", "#4f46e5"] },
 };
 
 function getDivisionStyle(divisionId: string) {
@@ -53,66 +60,226 @@ function getDivisionStyle(divisionId: string) {
 }
 
 // ============================================
-// ANIMATED BACKGROUND
+// ANIMATED MESH GRADIENT BACKGROUND
 // ============================================
 function AnimatedBackground() {
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden">
-      <div className="absolute inset-0 bg-background" />
-      <div className="absolute top-0 -left-4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "2s" }} />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-3xl animate-pulse" style={{ animationDelay: "4s", background: "rgba(var(--primary), 0.03)" }} />
+      <div className="absolute inset-0 bg-[#0a0a0f]" />
+      
+      {/* Morphing gradient blobs */}
+      <div 
+        className="absolute -top-32 -left-32 w-[600px] h-[600px] animate-morph-blob opacity-20"
+        style={{ background: "radial-gradient(circle, rgba(139,92,246,0.4) 0%, transparent 70%)" }}
+      />
+      <div 
+        className="absolute -bottom-32 -right-32 w-[500px] h-[500px] animate-morph-blob opacity-15"
+        style={{ background: "radial-gradient(circle, rgba(6,182,212,0.4) 0%, transparent 70%)", animationDelay: "-3s" }}
+      />
+      <div 
+        className="absolute top-1/3 left-1/2 w-[700px] h-[700px] animate-morph-blob opacity-10"
+        style={{ background: "radial-gradient(circle, rgba(236,72,153,0.3) 0%, transparent 70%)", animationDelay: "-5s" }}
+      />
+      
+      {/* Subtle grid pattern */}
+      <div 
+        className="absolute inset-0 opacity-[0.03]"
+        style={{ 
+          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+          backgroundSize: "60px 60px" 
+        }}
+      />
+      
+      {/* Floating particles */}
+      <FloatingParticles />
     </div>
   );
 }
 
 // ============================================
+// FLOATING PARTICLES
+// ============================================
+function FloatingParticles() {
+  const particles = useMemo(() => 
+    Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      size: Math.random() * 3 + 1,
+      duration: Math.random() * 15 + 10,
+      delay: Math.random() * 10,
+      opacity: Math.random() * 0.3 + 0.1,
+    })),
+  []);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="particle"
+          style={{
+            left: p.left,
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            background: `rgba(139, 92, 246, ${p.opacity})`,
+            animationDuration: `${p.duration}s`,
+            animationDelay: `${p.delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ============================================
+// ANIMATED COUNTER
+// ============================================
+function AnimatedCounter({ target, duration = 2000 }: { target: number; duration?: number }) {
+  const [count, setCount] = useState(0);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    
+    let start = 0;
+    const increment = target / (duration / 16);
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(Math.floor(start));
+      }
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target, duration]);
+
+  return <span className="counter-value">{count}</span>;
+}
+
+// ============================================
 // HEADER
 // ============================================
-function Header({ view, onBack, title, subtitle }: { 
+function Header({ view, onBack, title, subtitle, divisionId }: { 
   view: View; 
   onBack: () => void; 
   title: string; 
   subtitle: string;
+  divisionId?: string;
 }) {
+  const styles = divisionId ? getDivisionStyle(divisionId) : null;
+
   return (
-    <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
+    <motion.header 
+      initial={{ y: -20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+      className="sticky top-0 z-50 border-b border-white/[0.06] glass"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-4">
-        {view !== "home" && (
-          <button onClick={onBack} className="shrink-0 p-2 rounded-lg hover:bg-muted/50 transition-colors" aria-label="Go back">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-        )}
+        <AnimatePresence mode="wait">
+          {view !== "home" && (
+            <motion.button 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              onClick={onBack} 
+              className="shrink-0 p-2.5 rounded-xl glass-card hover:bg-white/10 transition-all duration-300 group"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+            </motion.button>
+          )}
+        </AnimatePresence>
+        
         <div className="flex items-center gap-3 min-w-0">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)/0.6))" }}>
-              <Sparkles className="h-4 w-4 text-primary-foreground" />
+          <motion.div 
+            className="flex items-center gap-2.5"
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center animate-gradient-flow shadow-lg" 
+              style={{ background: styles ? `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` : "linear-gradient(135deg, #8b5cf6, #06b6d4)" }}>
+              <Sparkles className="h-4 w-4 text-white" />
             </div>
             {view === "home" && (
-              <h1 className="text-lg font-bold tracking-tight truncate">The Agency</h1>
+              <motion.h1 
+                className="text-lg font-bold tracking-tight"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+              >
+                <span className="neon-text">The Agency</span>
+              </motion.h1>
             )}
-          </div>
+          </motion.div>
+          
           {view !== "home" && (
-            <div className="min-w-0">
+            <motion.div 
+              className="min-w-0"
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+            >
               <h1 className="text-sm font-semibold truncate">{title}</h1>
               <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
-            </div>
+            </motion.div>
           )}
         </div>
+        
         {view === "home" && (
-          <div className="ml-auto flex items-center gap-2">
-            <Badge variant="secondary" className="hidden sm:flex gap-1">
-              <Users className="h-3 w-3" />
-              {getTotalAgentCount()} Agents
+          <motion.div 
+            className="ml-auto flex items-center gap-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Badge variant="secondary" className="hidden sm:flex gap-1.5 glass-card border-white/10 px-3 py-1">
+              <Users className="h-3 w-3 text-violet-400" />
+              <span className="text-violet-300">{getTotalAgentCount()}</span> Agents
             </Badge>
-            <Badge variant="secondary" className="hidden sm:flex gap-1">
-              <Zap className="h-3 w-3" />
-              {divisions.length} Divisions
+            <Badge variant="secondary" className="hidden sm:flex gap-1.5 glass-card border-white/10 px-3 py-1">
+              <Layers className="h-3 w-3 text-cyan-400" />
+              <span className="text-cyan-300">{divisions.length}</span> Divisions
             </Badge>
-          </div>
+          </motion.div>
         )}
       </div>
-    </header>
+    </motion.header>
+  );
+}
+
+// ============================================
+// TYPING TEXT EFFECT
+// ============================================
+function TypingText({ text, delay = 0 }: { text: string; delay?: number }) {
+  const [displayed, setDisplayed] = useState("");
+  const [showCursor, setShowCursor] = useState(true);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      let i = 0;
+      const interval = setInterval(() => {
+        if (i < text.length) {
+          setDisplayed(text.slice(0, i + 1));
+          i++;
+        } else {
+          clearInterval(interval);
+          setTimeout(() => setShowCursor(false), 2000);
+        }
+      }, 40);
+      return () => clearInterval(interval);
+    }, delay);
+    return () => clearTimeout(timeout);
+  }, [text, delay]);
+
+  return (
+    <span>
+      {displayed}
+      {showCursor && <span className="animate-cursor-blink text-violet-400 ml-0.5">|</span>}
+    </span>
   );
 }
 
@@ -130,107 +297,241 @@ function HomePage({ onDivisionClick, onSearchSelect }: {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Hero Section */}
-      <div className="text-center mb-12">
-        <div className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-muted/50 px-4 py-1.5 text-sm text-muted-foreground mb-6">
-          <Sparkles className="h-4 w-4 text-primary" />
-          {getTotalAgentCount()} Specialized AI Agents across {divisions.length} Divisions
-        </div>
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-4">
-          <span className="bg-gradient-to-r from-primary via-primary/80 to-primary/60 bg-clip-text text-transparent">
+      <motion.div 
+        className="text-center mb-16"
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+      >
+        {/* Floating badge */}
+        <motion.div 
+          className="inline-flex items-center gap-2 rounded-full glass-card px-5 py-2 text-sm text-muted-foreground mb-8"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2, duration: 0.5, type: "spring" }}
+          whileHover={{ scale: 1.05 }}
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
+          </span>
+          <AnimatedCounter target={getTotalAgentCount()} /> Specialized AI Agents across {divisions.length} Divisions
+        </motion.div>
+
+        {/* Title with gradient and typing */}
+        <motion.h1 
+          className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight mb-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+        >
+          <span className="bg-gradient-to-r from-violet-400 via-cyan-400 to-pink-400 bg-clip-text text-transparent animate-gradient-flow bg-[length:200%_200%]">
             The Agency
           </span>
-        </h1>
-        <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-          A complete AI agency at your fingertips. Each agent is a specialized expert with personality, processes, and proven deliverables.
-        </p>
+        </motion.h1>
+        
+        <motion.p 
+          className="text-lg sm:text-xl text-muted-foreground/80 max-w-2xl mx-auto mb-10"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <TypingText text="A complete AI agency at your fingertips. Each agent is a specialized expert with personality, processes, and proven deliverables." delay={600} />
+        </motion.p>
 
         {/* Search Bar */}
-        <div className="relative max-w-xl mx-auto">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            placeholder="Search agents by name, specialty, or division..."
-            className="pl-12 h-12 text-base rounded-xl border-border/50 bg-card shadow-sm"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setShowSearch(e.target.value.length >= 2);
-            }}
-            onFocus={() => searchQuery.length >= 2 && setShowSearch(true)}
-            onBlur={() => setTimeout(() => setShowSearch(false), 200)}
-          />
-          {showSearch && searchResults.length > 0 && (
-            <div className="absolute top-full mt-2 w-full bg-card border border-border rounded-xl shadow-xl z-50 max-h-80 overflow-y-auto">
-              {searchResults.slice(0, 10).map((agent) => (
-                <button
-                  key={`${agent.divisionId}-${agent.id}`}
-                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left"
-                  onClick={() => {
-                    onSearchSelect(agent.divisionId, agent.id);
-                    setSearchQuery("");
-                    setShowSearch(false);
-                  }}
-                >
-                  <span className="text-2xl">{agent.emoji}</span>
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm truncate">{agent.name}</div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {agent.divisionEmoji} {agent.divisionName} — {agent.specialty}
+        <motion.div 
+          className="relative max-w-xl mx-auto"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+        >
+          <div className="search-glow rounded-2xl glass-strong transition-all duration-300">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-violet-400" />
+            <Input
+              placeholder="Search agents by name, specialty, or division..."
+              className="pl-13 h-14 text-base rounded-2xl border-0 bg-transparent focus:ring-0 focus:outline-none placeholder:text-muted-foreground/50"
+              style={{ paddingLeft: "3rem" }}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSearch(e.target.value.length >= 2);
+              }}
+              onFocus={() => searchQuery.length >= 2 && setShowSearch(true)}
+              onBlur={() => setTimeout(() => setShowSearch(false), 200)}
+            />
+          </div>
+          
+          <AnimatePresence>
+            {showSearch && searchResults.length > 0 && (
+              <motion.div 
+                className="absolute top-full mt-3 w-full glass-strong rounded-2xl shadow-2xl shadow-black/40 z-50 max-h-80 overflow-y-auto"
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+              >
+                {searchResults.slice(0, 10).map((agent, i) => (
+                  <motion.button
+                    key={`${agent.divisionId}-${agent.id}`}
+                    className="w-full px-5 py-3.5 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    onClick={() => {
+                      onSearchSelect(agent.divisionId, agent.id);
+                      setSearchQuery("");
+                      setShowSearch(false);
+                    }}
+                  >
+                    <span className="text-2xl">{agent.emoji}</span>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{agent.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {agent.divisionEmoji} {agent.divisionName} — {agent.specialty}
+                      </div>
                     </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+                    <ChevronRight className="h-4 w-4 text-violet-400 ml-auto shrink-0" />
+                  </motion.button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-12">
+      <motion.div 
+        className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-16"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.9, duration: 0.5 }}
+      >
         {[
-          { label: "Total Agents", value: getTotalAgentCount().toString(), icon: Users },
-          { label: "Divisions", value: divisions.length.toString(), icon: Zap },
-          { label: "Lines of Code", value: "10,000+", icon: Sparkles },
-          { label: "GitHub Stars", value: "108K+", icon: Shield },
-        ].map((stat) => (
-          <Card key={stat.label} className="border-border/30 bg-card/50">
-            <CardContent className="p-4 text-center">
-              <stat.icon className="h-5 w-5 mx-auto mb-2 text-primary" />
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <div className="text-xs text-muted-foreground">{stat.label}</div>
-            </CardContent>
-          </Card>
+          { label: "Total Agents", value: getTotalAgentCount(), icon: Users, color: "text-violet-400", glow: "rgba(139,92,246,0.2)" },
+          { label: "Divisions", value: divisions.length, icon: Layers, color: "text-cyan-400", glow: "rgba(6,182,212,0.2)" },
+          { label: "Workflows", value: 87, icon: Activity, color: "text-pink-400", glow: "rgba(236,72,153,0.2)" },
+          { label: "Deliverables", value: 500, icon: Rocket, color: "text-amber-400", glow: "rgba(245,158,11,0.2)" },
+        ].map((stat, i) => (
+          <motion.div
+            key={stat.label}
+            className="glass-card rounded-2xl p-5 text-center group cursor-default"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1 + i * 0.1, duration: 0.4 }}
+            whileHover={{ 
+              scale: 1.03,
+              boxShadow: `0 0 30px ${stat.glow}`
+            }}
+          >
+            <stat.icon className={`h-6 w-6 mx-auto mb-3 ${stat.color} group-hover:scale-110 transition-transform`} />
+            <div className="text-3xl font-black mb-1">
+              <AnimatedCounter target={stat.value} duration={1500} />
+              {stat.value >= 500 ? "+" : ""}
+            </div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider">{stat.label}</div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
       {/* Division Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {divisions.map((division) => {
+      <div className="mb-8">
+        <motion.div 
+          className="flex items-center gap-3 mb-8"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.3 }}
+        >
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <span className="text-sm font-medium text-muted-foreground uppercase tracking-widest">Explore Divisions</span>
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+        </motion.div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        {divisions.map((division, i) => {
           const styles = getDivisionStyle(division.id);
           return (
-            <div
+            <motion.div
               key={division.id}
-              className="group cursor-pointer rounded-xl border bg-card/50 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300 overflow-hidden"
-              style={{ ...styles.bg, ...styles.border, borderWidth: "1px" }}
+              className="group cursor-pointer"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.4 + i * 0.06, duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+              whileHover={{ 
+                y: -8,
+                transition: { duration: 0.3 }
+              }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => onDivisionClick(division)}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && onDivisionClick(division)}
             >
-              <div className="p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg" style={styles.icon}>
-                    <span className="text-2xl">{division.emoji}</span>
+              <div 
+                className="glass-card rounded-2xl overflow-hidden h-full"
+                style={{ 
+                  ...styles.bg, 
+                  borderWidth: "1px", 
+                  ...styles.border,
+                }}
+              >
+                {/* Animated top gradient bar */}
+                <div 
+                  className="h-1 w-full animate-gradient-flow"
+                  style={{ background: `linear-gradient(90deg, ${styles.colors[0]}, ${styles.colors[1]}, ${styles.colors[0]})`, backgroundSize: "200% 100%" }}
+                />
+                
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <motion.div 
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg relative overflow-hidden"
+                      style={styles.icon}
+                      whileHover={{ rotate: 5, scale: 1.1 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <span className="text-3xl relative z-10">{division.emoji}</span>
+                      {/* Shimmer overlay */}
+                      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                        <div className="absolute inset-0 animate-shimmer" style={{ background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)", backgroundSize: "200% 100%" }} />
+                      </div>
+                    </motion.div>
+                    
+                    <motion.div
+                      className="opacity-0 group-hover:opacity-100 transition-all duration-300"
+                      initial={false}
+                    >
+                      <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:translate-x-1 transition-transform" style={{ color: styles.colors[0] }} />
+                    </motion.div>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors group-hover:translate-x-1 transition-transform" />
+                  
+                  <h3 className="font-bold text-base mb-2 group-hover:text-white transition-colors">{division.name}</h3>
+                  <p className="text-xs text-muted-foreground line-clamp-2 mb-4 leading-relaxed">{division.tagline}</p>
+                  
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary" className="text-[11px] glass-card border-white/10 px-2.5 py-0.5">
+                      {division.agents.length} agents
+                    </Badge>
+                    <div className="flex -space-x-1">
+                      {division.agents.slice(0, 3).map((a, j) => (
+                        <motion.span 
+                          key={j} 
+                          className="text-sm"
+                          initial={{ opacity: 0, scale: 0 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 1.8 + i * 0.06 + j * 0.05 }}
+                        >
+                          {a.emoji}
+                        </motion.span>
+                      ))}
+                      {division.agents.length > 3 && (
+                        <span className="text-[10px] text-muted-foreground ml-1">+{division.agents.length - 3}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <h3 className="font-semibold text-base mb-1">{division.name}</h3>
-                <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{division.tagline}</p>
-                <Badge variant="secondary" className="text-xs">
-                  {division.agents.length} agents
-                </Badge>
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
@@ -257,68 +558,153 @@ function DivisionPage({ division, onAgentClick }: {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Division Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-lg" style={styles.icon}>
-            <span className="text-4xl">{division.emoji}</span>
-          </div>
+      <motion.div 
+        className="mb-10"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="flex items-center gap-5 mb-6">
+          <motion.div 
+            className="w-20 h-20 rounded-3xl flex items-center justify-center text-white shadow-2xl relative"
+            style={{ ...styles.icon, boxShadow: `0 0 40px ${styles.glow}` }}
+            animate={{ 
+              boxShadow: [`0 0 40px ${styles.glow}`, `0 0 60px ${styles.glow}`, `0 0 40px ${styles.glow}`],
+            }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <span className="text-5xl">{division.emoji}</span>
+          </motion.div>
           <div>
-            <h2 className="text-2xl font-bold">{division.emoji} {division.name} Division</h2>
-            <p className="text-muted-foreground">{division.tagline}</p>
+            <motion.h2 
+              className="text-3xl font-black mb-1"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              {division.name} Division
+            </motion.h2>
+            <motion.p 
+              className="text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              {division.tagline}
+            </motion.p>
+            <motion.div 
+              className="flex items-center gap-3 mt-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Badge variant="secondary" className="glass-card border-white/10 gap-1.5">
+                <Users className="h-3 w-3" style={{ color: styles.colors[0] }} />
+                {division.agents.length} Agents
+              </Badge>
+              <Badge variant="secondary" className="glass-card border-white/10 gap-1.5">
+                <Activity className="h-3 w-3" style={{ color: styles.colors[0] }} />
+                {division.agents.reduce((sum, a) => sum + a.deliverables.length, 0)} Deliverables
+              </Badge>
+            </motion.div>
           </div>
         </div>
 
         {/* Search/Filter */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={`Filter ${division.name} agents...`}
-            className="pl-10 h-10 rounded-lg"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-        </div>
-      </div>
+        <motion.div 
+          className="relative max-w-md"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+        >
+          <div className="search-glow rounded-xl glass-strong transition-all duration-300">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: styles.colors[0] }} />
+            <Input
+              placeholder={`Filter ${division.name} agents...`}
+              className="pl-10 h-11 rounded-xl border-0 bg-transparent focus:ring-0 focus:outline-none placeholder:text-muted-foreground/50"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </div>
+        </motion.div>
+      </motion.div>
 
       {/* Agent Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredAgents.map((agent) => (
-          <div
-            key={agent.id}
-            className="group cursor-pointer rounded-xl border border-border/30 bg-card/50 hover:bg-card hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300"
-            onClick={() => onAgentClick(agent)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === "Enter" && onAgentClick(agent)}
-          >
-            <div className="p-5">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{agent.emoji}</span>
-                  <div>
-                    <h3 className="font-semibold text-sm">{agent.name}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <AnimatePresence mode="popLayout">
+          {filteredAgents.map((agent, i) => (
+            <motion.div
+              key={agent.id}
+              layout
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ delay: i * 0.06, duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+              className="group cursor-pointer"
+              whileHover={{ y: -6, transition: { duration: 0.25 } }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => onAgentClick(agent)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === "Enter" && onAgentClick(agent)}
+            >
+              <div 
+                className="glass-card rounded-2xl p-6 h-full relative overflow-hidden"
+                style={{ borderWidth: "1px", borderColor: `${styles.colors[0]}15` }}
+              >
+                {/* Hover glow effect */}
+                <div 
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl"
+                  style={{ background: `radial-gradient(circle at 50% 0%, ${styles.glow}10, transparent 70%)` }}
+                />
+                
+                <div className="relative z-10">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <motion.span 
+                        className="text-3xl"
+                        whileHover={{ scale: 1.2, rotate: 10 }}
+                        transition={{ type: "spring", stiffness: 400 }}
+                      >
+                        {agent.emoji}
+                      </motion.span>
+                      <div>
+                        <h3 className="font-bold text-sm group-hover:text-white transition-colors">{agent.name}</h3>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: `${styles.colors[0]}15`, color: styles.colors[0] }}>
+                          {agent.specialty.split(",")[0]}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform opacity-0 group-hover:opacity-100" style={{ color: styles.colors[0] }} />
+                  </div>
+                  
+                  <p className="text-xs text-muted-foreground line-clamp-2 mb-3 leading-relaxed">{agent.whenToUse}</p>
+                  
+                  <div className="flex gap-2">
+                    <Badge variant="outline" className="text-[10px] px-2 py-0 border-white/10">
+                      {agent.deliverables.length} deliverables
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] px-2 py-0 border-white/10">
+                      {agent.successMetrics.length} metrics
+                    </Badge>
                   </div>
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors group-hover:translate-x-1 transition-transform" />
               </div>
-              <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{agent.specialty}</p>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
-                <span className="font-medium text-foreground/70">When to use:</span>
-                <span className="line-clamp-1">{agent.whenToUse}</span>
-              </div>
-              <div className="flex gap-1.5">
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">{agent.deliverables.length} deliverables</Badge>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">{agent.successMetrics.length} metrics</Badge>
-              </div>
-            </div>
-          </div>
-        ))}
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
       {filteredAgents.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
-          No agents match your filter. Try a different search term.
-        </div>
+        <motion.div 
+          className="text-center py-16 text-muted-foreground"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
+          <p className="text-lg">No agents match your filter</p>
+          <p className="text-sm mt-1">Try a different search term</p>
+        </motion.div>
       )}
     </div>
   );
@@ -337,129 +723,215 @@ function AgentDetailPage({ division, agent, onEnterWorkspace }: {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Agent Profile Header */}
-      <div className="mb-8">
+      <motion.div 
+        className="mb-8"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="flex flex-col sm:flex-row items-start gap-6">
-          <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-white shadow-lg shrink-0" style={styles.icon}>
-            <span className="text-5xl">{agent.emoji}</span>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-2xl font-bold">{agent.name}</h2>
-              <Badge variant="secondary" className="text-xs">
+          <motion.div 
+            className="w-24 h-24 rounded-3xl flex items-center justify-center text-white shadow-2xl shrink-0 relative"
+            style={{ ...styles.icon, boxShadow: `0 0 50px ${styles.glow}` }}
+            animate={{ 
+              boxShadow: [`0 0 50px ${styles.glow}`, `0 0 70px ${styles.glow}`, `0 0 50px ${styles.glow}`],
+            }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            whileHover={{ scale: 1.05, rotate: 5 }}
+          >
+            <span className="text-6xl">{agent.emoji}</span>
+          </motion.div>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <motion.h2 
+                className="text-3xl font-black"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                {agent.name}
+              </motion.h2>
+              <Badge variant="secondary" className="glass-card border-white/10 text-xs gap-1.5">
                 {division.emoji} {division.name}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground italic">&ldquo;{agent.personality}&rdquo;</p>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="text-xs">{agent.specialty}</Badge>
-            </div>
+            <motion.p 
+              className="text-sm text-muted-foreground italic leading-relaxed"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              &ldquo;{agent.personality}&rdquo;
+            </motion.p>
+            <motion.div 
+              className="flex flex-wrap gap-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4 }}
+            >
+              {agent.specialty.split(", ").map((s, i) => (
+                <Badge key={i} variant="outline" className="text-[11px] border-white/10" style={{ borderColor: `${styles.colors[0]}30`, color: styles.colors[0] }}>
+                  {s}
+                </Badge>
+              ))}
+            </motion.div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Core Mission */}
-      <Card className="mb-6 border-border/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            Core Mission
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">{agent.coreMission}</p>
-        </CardContent>
-      </Card>
+      <motion.div 
+        className="glass-card rounded-2xl p-6 mb-5 relative overflow-hidden"
+        style={{ borderWidth: "1px", borderColor: `${styles.colors[0]}15` }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        whileHover={{ borderColor: `${styles.colors[0]}30` }}
+      >
+        <div className="absolute top-0 left-0 right-0 h-px animate-gradient-flow" style={{ background: `linear-gradient(90deg, transparent, ${styles.colors[0]}, transparent)`, backgroundSize: "200% 100%" }} />
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="h-4 w-4" style={{ color: styles.colors[0] }} />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Core Mission</h3>
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed">{agent.coreMission}</p>
+      </motion.div>
 
       {/* When to Use */}
-      <Card className="mb-6 border-border/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            When to Use
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">{agent.whenToUse}</p>
-        </CardContent>
-      </Card>
+      <motion.div 
+        className="glass-card rounded-2xl p-6 mb-5 relative overflow-hidden"
+        style={{ borderWidth: "1px", borderColor: `${styles.colors[0]}15` }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        whileHover={{ borderColor: `${styles.colors[0]}30` }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <Target className="h-4 w-4" style={{ color: styles.colors[0] }} />
+          <h3 className="text-sm font-bold uppercase tracking-wider">When to Use</h3>
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed">{agent.whenToUse}</p>
+      </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
         {/* Deliverables */}
-        <Card className="border-border/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Technical Deliverables
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {agent.deliverables.map((d, i) => (
-                <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                  <span className="text-primary mt-0.5 shrink-0">•</span>
-                  <span>{d}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <motion.div 
+          className="glass-card rounded-2xl p-6 relative overflow-hidden"
+          style={{ borderWidth: "1px", borderColor: `${styles.colors[0]}15` }}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          whileHover={{ borderColor: `${styles.colors[0]}30` }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="h-4 w-4" style={{ color: styles.colors[0] }} />
+            <h3 className="text-sm font-bold uppercase tracking-wider">Technical Deliverables</h3>
+          </div>
+          <ul className="space-y-3">
+            {agent.deliverables.map((d, i) => (
+              <motion.li 
+                key={i} 
+                className="text-xs text-muted-foreground flex items-start gap-2.5"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 + i * 0.05 }}
+              >
+                <span className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full" style={{ background: styles.colors[0] }} />
+                <span className="leading-relaxed">{d}</span>
+              </motion.li>
+            ))}
+          </ul>
+        </motion.div>
 
         {/* Success Metrics */}
-        <Card className="border-border/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Shield className="h-4 w-4 text-primary" />
-              Success Metrics
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {agent.successMetrics.map((m, i) => (
-                <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                  <span className="text-green-500 mt-0.5 shrink-0">✓</span>
-                  <span>{m}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <motion.div 
+          className="glass-card rounded-2xl p-6 relative overflow-hidden"
+          style={{ borderWidth: "1px", borderColor: `${styles.colors[0]}15` }}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+          whileHover={{ borderColor: `${styles.colors[0]}30` }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="h-4 w-4" style={{ color: styles.colors[0] }} />
+            <h3 className="text-sm font-bold uppercase tracking-wider">Success Metrics</h3>
+          </div>
+          <ul className="space-y-3">
+            {agent.successMetrics.map((m, i) => (
+              <motion.li 
+                key={i} 
+                className="text-xs text-muted-foreground flex items-start gap-2.5"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 + i * 0.05 }}
+              >
+                <span className="mt-0.5 shrink-0 text-emerald-400">✓</span>
+                <span className="leading-relaxed">{m}</span>
+              </motion.li>
+            ))}
+          </ul>
+        </motion.div>
       </div>
 
       {/* Workflow */}
-      <Card className="mb-6 border-border/30">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Globe className="h-4 w-4 text-primary" />
-            Workflow Process
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
-            {agent.workflow.map((step, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2 text-xs">
-                  <span className="font-bold text-primary">{i + 1}</span>
-                  <span className="text-muted-foreground">{step.replace(/^\d+\.\s*/, "")}</span>
-                </div>
-                {i < agent.workflow.length - 1 && (
-                  <ChevronRight className="h-4 w-4 text-muted-foreground hidden sm:block shrink-0" />
-                )}
+      <motion.div 
+        className="glass-card rounded-2xl p-6 mb-8 relative overflow-hidden"
+        style={{ borderWidth: "1px", borderColor: `${styles.colors[0]}15` }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
+        whileHover={{ borderColor: `${styles.colors[0]}30` }}
+      >
+        <div className="flex items-center gap-2 mb-5">
+          <Globe className="h-4 w-4" style={{ color: styles.colors[0] }} />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Workflow Process</h3>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+          {agent.workflow.map((step, i) => (
+            <motion.div 
+              key={i} 
+              className="flex items-center gap-2"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 + i * 0.1 }}
+            >
+              <div className="flex items-center gap-3 glass-card rounded-xl px-4 py-2.5 text-xs">
+                <span className="font-black text-base" style={{ color: styles.colors[0] }}>{i + 1}</span>
+                <span className="text-muted-foreground leading-relaxed">{step.replace(/^\d+\.\s*/, "")}</span>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              {i < agent.workflow.length - 1 && (
+                <ChevronRight className="h-4 w-4 hidden sm:block shrink-0 opacity-30" />
+              )}
+            </motion.div>
+          ))}
+        </div>
+      </motion.div>
 
       {/* Enter Workspace CTA */}
-      <button
+      <motion.button
         onClick={onEnterWorkspace}
-        className="w-full h-14 text-base rounded-xl shadow-lg flex items-center justify-center gap-2 text-white font-medium transition-all duration-200 hover:opacity-90 hover:shadow-xl"
-        style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary)/0.7))" }}
+        className="w-full h-16 text-base rounded-2xl shadow-2xl flex items-center justify-center gap-3 text-white font-bold transition-all duration-300 relative overflow-hidden group"
+        style={{ background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.8 }}
+        whileHover={{ 
+          scale: 1.02,
+          boxShadow: `0 0 40px ${styles.glow}`
+        }}
+        whileTap={{ scale: 0.98 }}
       >
-        <MessageSquare className="h-5 w-5" />
-        Enter Workspace — Chat with {agent.name}
-        <ArrowRight className="h-5 w-5" />
-      </button>
+        {/* Animated shine effect */}
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute inset-0 animate-shimmer" style={{ background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%)", backgroundSize: "200% 100%" }} />
+        </div>
+        
+        <MessageSquare className="h-5 w-5 relative z-10" />
+        <span className="relative z-10">Enter Workspace — Chat with {agent.name}</span>
+        <ArrowRight className="h-5 w-5 relative z-10 group-hover:translate-x-1 transition-transform" />
+        
+        {/* Animated border glow */}
+        <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" style={{ boxShadow: `inset 0 0 20px rgba(255,255,255,0.2)` }} />
+      </motion.button>
     </div>
   );
 }
@@ -535,115 +1007,180 @@ function AgentWorkspace({ division, agent }: {
     }
   };
 
+  const renderMessageContent = (content: string) => {
+    return content.split('\n').map((line, j) => (
+      <React.Fragment key={j}>
+        {line.startsWith('**') && line.endsWith('**') ? (
+          <strong className="font-semibold">{line.replace(/\*\*/g, '')}</strong>
+        ) : line.startsWith('- ') ? (
+          <span className="block pl-2">• {line.slice(2)}</span>
+        ) : (
+          <span>{line}</span>
+        )}
+        {j < content.split('\n').length - 1 && <br />}
+      </React.Fragment>
+    ));
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Agent Info Bar */}
-      <div className="border-b border-border/30 bg-card/50 px-4 py-3">
+      <motion.div 
+        className="border-b border-white/[0.06] glass px-4 py-3"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
         <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-md shrink-0" style={styles.icon}>
+          <motion.div 
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-lg shrink-0 relative"
+            style={{ ...styles.icon, boxShadow: `0 0 25px ${styles.glow}` }}
+            animate={{ boxShadow: [`0 0 25px ${styles.glow}`, `0 0 35px ${styles.glow}`, `0 0 25px ${styles.glow}`] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          >
             <span className="text-xl">{agent.emoji}</span>
-          </div>
+          </motion.div>
           <div className="min-w-0">
-            <div className="font-semibold text-sm">{agent.name}</div>
-            <div className="text-xs text-muted-foreground truncate">{agent.specialty}</div>
+            <div className="font-bold text-sm">{agent.name}</div>
+            <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+              Online — {agent.specialty.split(",")[0]}
+            </div>
           </div>
-          <Badge variant="secondary" className="ml-auto text-xs shrink-0">
+          <Badge variant="secondary" className="ml-auto text-xs shrink-0 glass-card border-white/10 gap-1.5">
             {division.emoji} {division.name}
           </Badge>
         </div>
-      </div>
+      </motion.div>
 
       {/* Chat Messages */}
       <ScrollArea className="flex-1 px-4">
-        <div className="max-w-4xl mx-auto py-6 space-y-6" ref={scrollRef}>
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
-            >
-              <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : ""
-                }`}
-                style={msg.role === "assistant" ? { background: "linear-gradient(135deg, rgba(var(--primary),0.2), rgba(var(--primary),0.1))", border: "1px solid rgba(var(--primary),0.2)" } : {}}
+        <div className="max-w-4xl mx-auto py-6 space-y-5" ref={scrollRef}>
+          <AnimatePresence initial={false}>
+            {messages.map((msg, i) => (
+              <motion.div
+                key={i}
+                className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+                initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
               >
-                {msg.role === "user" ? (
-                  <User className="h-4 w-4" />
-                ) : (
-                  <Bot className="h-4 w-4 text-primary" />
-                )}
-              </div>
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-tr-sm"
-                    : "bg-muted/50 border border-border/30 rounded-tl-sm"
-                }`}
-              >
-                <div className="whitespace-pre-wrap break-words leading-relaxed">
-                  {msg.content.split('\n').map((line, j) => (
-                    <React.Fragment key={j}>
-                      {line.startsWith('**') && line.endsWith('**') ? (
-                        <strong>{line.replace(/\*\*/g, '')}</strong>
-                      ) : line.startsWith('- ') ? (
-                        <span className="block pl-2">• {line.slice(2)}</span>
-                      ) : (
-                        <span>{line}</span>
-                      )}
-                      {j < msg.content.split('\n').length - 1 && <br />}
-                    </React.Fragment>
-                  ))}
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                    msg.role === "user"
+                      ? "shadow-lg"
+                      : ""
+                  }`}
+                  style={msg.role === "user" 
+                    ? { background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` } 
+                    : { background: `linear-gradient(135deg, ${styles.colors[0]}20, ${styles.colors[1]}20)`, border: `1px solid ${styles.colors[0]}20` }
+                  }
+                >
+                  {msg.role === "user" ? (
+                    <User className="h-4 w-4 text-white" />
+                  ) : (
+                    <Bot className="h-4 w-4" style={{ color: styles.colors[0] }} />
+                  )}
                 </div>
-              </div>
-            </div>
-          ))}
+                <div
+                  className={`max-w-[80%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed ${
+                    msg.role === "user"
+                      ? "text-white rounded-tr-sm"
+                      : "glass-card rounded-tl-sm"
+                  }`}
+                  style={msg.role === "user"
+                    ? { background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` }
+                    : {}
+                  }
+                >
+                  <div className="whitespace-pre-wrap break-words">
+                    {renderMessageContent(msg.content)}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          
           {isLoading && (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, rgba(var(--primary),0.2), rgba(var(--primary),0.1))", border: "1px solid rgba(var(--primary),0.2))" }}>
-                <Bot className="h-4 w-4 text-primary" />
+            <motion.div 
+              className="flex gap-3"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: `linear-gradient(135deg, ${styles.colors[0]}20, ${styles.colors[1]}20)`, border: `1px solid ${styles.colors[0]}20` }}>
+                <Bot className="h-4 w-4" style={{ color: styles.colors[0] }} />
               </div>
-              <div className="bg-muted/50 border border-border/30 rounded-2xl rounded-tl-sm px-4 py-3">
+              <div className="glass-card rounded-2xl rounded-tl-sm px-5 py-4">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Thinking...</span>
+                  <span className="typing-dot" style={{ background: styles.colors[0] }} />
+                  <span className="typing-dot" style={{ background: styles.colors[0] }} />
+                  <span className="typing-dot" style={{ background: styles.colors[0] }} />
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
       </ScrollArea>
 
       {/* Input Area */}
-      <div className="border-t border-border/30 bg-card/50 px-4 py-4">
+      <motion.div 
+        className="border-t border-white/[0.06] glass px-4 py-4"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
         <div className="max-w-4xl mx-auto flex gap-3">
-          <Input
-            ref={inputRef}
-            placeholder={`Ask ${agent.name} anything...`}
-            className="flex-1 h-12 rounded-xl border-border/30"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading}
-          />
-          <Button
+          <div className="flex-1 search-glow rounded-xl glass-strong transition-all duration-300">
+            <Input
+              ref={inputRef}
+              placeholder={`Ask ${agent.name} anything...`}
+              className="h-12 rounded-xl border-0 bg-transparent focus:ring-0 focus:outline-none placeholder:text-muted-foreground/50"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading}
+            />
+          </div>
+          <motion.button
             onClick={sendMessage}
             disabled={!input.trim() || isLoading}
-            className="h-12 w-12 rounded-xl shrink-0"
-            size="icon"
+            className="h-12 w-12 rounded-xl shrink-0 flex items-center justify-center text-white shadow-lg disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-300"
+            style={{ background: `linear-gradient(135deg, ${styles.colors[0]}, ${styles.colors[1]})` }}
+            whileHover={{ 
+              scale: 1.05, 
+              boxShadow: `0 0 25px ${styles.glow}`,
+            }}
+            whileTap={{ scale: 0.95 }}
           >
             {isLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <Send className="h-5 w-5" />
             )}
-          </Button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
+
+// ============================================
+// PAGE TRANSITION VARIANTS
+// ============================================
+const pageVariants = {
+  initial: { opacity: 0, x: 20, scale: 0.98 },
+  animate: { opacity: 1, x: 0, scale: 1 },
+  exit: { opacity: 0, x: -20, scale: 0.98 },
+};
+
+const pageTransition = {
+  type: "spring" as const,
+  stiffness: 300,
+  damping: 30,
+};
 
 // ============================================
 // MAIN PAGE
@@ -716,38 +1253,91 @@ export default function AgencyPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <AnimatedBackground />
-      <Header view={view} onBack={handleBack} title={getTitle()} subtitle={getSubtitle()} />
+      <Header 
+        view={view} 
+        onBack={handleBack} 
+        title={getTitle()} 
+        subtitle={getSubtitle()} 
+        divisionId={currentDivision?.id}
+      />
       
       <main className="flex-1">
-        {view === "home" && (
-          <HomePage onDivisionClick={handleDivisionClick} onSearchSelect={handleSearchSelect} />
-        )}
-        {view === "division" && currentDivision && (
-          <DivisionPage division={currentDivision} onAgentClick={handleAgentClick} />
-        )}
-        {view === "agent" && currentDivision && currentAgent && (
-          <AgentDetailPage
-            division={currentDivision}
-            agent={currentAgent}
-            onEnterWorkspace={handleEnterWorkspace}
-          />
-        )}
-        {view === "workspace" && currentDivision && currentAgent && (
-          <AgentWorkspace
-            division={currentDivision}
-            agent={currentAgent}
-          />
-        )}
+        <AnimatePresence mode="wait">
+          {view === "home" && (
+            <motion.div
+              key="home"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={pageTransition}
+            >
+              <HomePage onDivisionClick={handleDivisionClick} onSearchSelect={handleSearchSelect} />
+            </motion.div>
+          )}
+          {view === "division" && currentDivision && (
+            <motion.div
+              key="division"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={pageTransition}
+            >
+              <DivisionPage division={currentDivision} onAgentClick={handleAgentClick} />
+            </motion.div>
+          )}
+          {view === "agent" && currentDivision && currentAgent && (
+            <motion.div
+              key="agent"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={pageTransition}
+            >
+              <AgentDetailPage
+                division={currentDivision}
+                agent={currentAgent}
+                onEnterWorkspace={handleEnterWorkspace}
+              />
+            </motion.div>
+          )}
+          {view === "workspace" && currentDivision && currentAgent && (
+            <motion.div
+              key="workspace"
+              variants={pageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={pageTransition}
+              className="flex-1"
+            >
+              <AgentWorkspace
+                division={currentDivision}
+                agent={currentAgent}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Footer */}
       {view !== "workspace" && (
-        <footer className="border-t border-border/30 bg-card/30 mt-auto">
+        <motion.footer 
+          className="border-t border-white/[0.04] glass mt-auto"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 2 }}
+        >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-sm text-muted-foreground">
-            <p>The Agency — {getTotalAgentCount()} Specialized AI Agents across {divisions.length} Divisions</p>
-            <p className="mt-1 text-xs">Open Source • MIT License • Battle-Tested in Production</p>
+            <p className="flex items-center justify-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+              <span>The Agency — <AnimatedCounter target={getTotalAgentCount()} duration={1000} /> Specialized AI Agents across {divisions.length} Divisions</span>
+            </p>
+            <p className="mt-1.5 text-xs text-muted-foreground/50">Open Source • MIT License • Battle-Tested in Production</p>
           </div>
-        </footer>
+        </motion.footer>
       )}
     </div>
   );
