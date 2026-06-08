@@ -1248,21 +1248,149 @@ function AgentWorkspace({ division, agent }: {
     }
   };
 
+  const renderInlineMarkdown = (text: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = [];
+    // Match **bold**, *italic*, `code`, [link](url)
+    const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`(.+?)`)|(\[(.+?)\]\((.+?)\))/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let keyIdx = 0;
+
+    while ((match = regex.exec(text)) !== null) {
+      // Add any plain text before this match
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+
+      if (match[1]) {
+        // **bold**
+        parts.push(<strong key={`b${keyIdx++}`} className="font-semibold text-white">{match[2]}</strong>);
+      } else if (match[3]) {
+        // *italic*
+        parts.push(<em key={`i${keyIdx++}`} className="italic text-white/90">{match[4]}</em>);
+      } else if (match[5]) {
+        // `code`
+        parts.push(
+          <code key={`c${keyIdx++}`} className="bg-black/30 text-violet-300 px-1.5 py-0.5 rounded text-xs font-mono">
+            {match[6]}
+          </code>
+        );
+      } else if (match[7]) {
+        // [link](url)
+        parts.push(
+          <a key={`a${keyIdx++}`} href={match[9]} target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline hover:text-cyan-300 transition-colors">
+            {match[8]}
+          </a>
+        );
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining plain text
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : [text];
+  };
+
   const renderMessageContent = (content: string) => {
-    return content.split('\n').map((line, j) => (
-      <React.Fragment key={j}>
-        {line.startsWith('**') && line.endsWith('**') ? (
-          <strong className="font-semibold">{line.replace(/\*\*/g, '')}</strong>
-        ) : line.startsWith('- ') ? (
-          <span className="block pl-2">• {line.slice(2)}</span>
-        ) : line.startsWith('```') ? (
-          <code className="block bg-black/20 rounded px-2 py-1 text-xs font-mono my-1 overflow-x-auto">{line.replace(/```/g, '')}</code>
-        ) : (
-          <span>{line}</span>
-        )}
-        {j < content.split('\n').length - 1 && <br />}
-      </React.Fragment>
-    ));
+    const lines = content.split('\n');
+    const elements: React.ReactNode[] = [];
+    let inCodeBlock = false;
+    let codeBlockContent: string[] = [];
+    let codeBlockKey = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Multi-line code block
+      if (line.startsWith('```')) {
+        if (inCodeBlock) {
+          // End of code block
+          elements.push(
+            <pre key={`code${codeBlockKey++}`} className="bg-black/30 rounded-xl px-4 py-3 my-2 overflow-x-auto border border-white/10">
+              <code className="text-xs font-mono text-violet-300">{codeBlockContent.join('\n')}</code>
+            </pre>
+          );
+          codeBlockContent = [];
+          inCodeBlock = false;
+        } else {
+          // Start of code block
+          inCodeBlock = true;
+        }
+        continue;
+      }
+
+      if (inCodeBlock) {
+        codeBlockContent.push(line);
+        continue;
+      }
+
+      // Heading lines (### style)
+      if (line.startsWith('### ')) {
+        elements.push(<h4 key={`h3-${i}`} className="font-bold text-white mt-2 mb-1">{renderInlineMarkdown(line.slice(4))}</h4>);
+        continue;
+      }
+      if (line.startsWith('## ')) {
+        elements.push(<h3 key={`h2-${i}`} className="font-bold text-white text-base mt-2 mb-1">{renderInlineMarkdown(line.slice(3))}</h3>);
+        continue;
+      }
+      if (line.startsWith('# ')) {
+        elements.push(<h2 key={`h1-${i}`} className="font-bold text-white text-lg mt-2 mb-1">{renderInlineMarkdown(line.slice(2))}</h2>);
+        continue;
+      }
+
+      // Numbered list (1. 2. 3. etc.)
+      if (/^\d+\.\s/.test(line)) {
+        const listContent = line.replace(/^\d+\.\s/, '');
+        elements.push(
+          <div key={`ol-${i}`} className="flex gap-2 pl-2">
+            <span className="text-violet-400 shrink-0 font-mono text-xs leading-relaxed">{line.match(/^\d+/)?.[0]}.</span>
+            <span className="leading-relaxed">{renderInlineMarkdown(listContent)}</span>
+          </div>
+        );
+        continue;
+      }
+
+      // Bullet list (- or * at start)
+      if (line.match(/^[\-\*]\s/) && !line.startsWith('**')) {
+        elements.push(
+          <div key={`ul-${i}`} className="flex gap-2 pl-2">
+            <span className="text-violet-400 shrink-0 leading-relaxed">•</span>
+            <span className="leading-relaxed">{renderInlineMarkdown(line.slice(2))}</span>
+          </div>
+        );
+        continue;
+      }
+
+      // Horizontal rule
+      if (line.match(/^---+$/)) {
+        elements.push(<hr key={`hr-${i}`} className="border-white/10 my-2" />);
+        continue;
+      }
+
+      // Empty line = paragraph break
+      if (line.trim() === '') {
+        elements.push(<div key={`br-${i}`} className="h-2" />);
+        continue;
+      }
+
+      // Regular text with inline markdown
+      elements.push(<div key={`p-${i}`} className="leading-relaxed">{renderInlineMarkdown(line)}</div>);
+    }
+
+    // Handle unclosed code block
+    if (inCodeBlock && codeBlockContent.length > 0) {
+      elements.push(
+        <pre key={`code-final`} className="bg-black/30 rounded-xl px-4 py-3 my-2 overflow-x-auto border border-white/10">
+          <code className="text-xs font-mono text-violet-300">{codeBlockContent.join('\n')}</code>
+        </pre>
+      );
+    }
+
+    return <>{elements}</>;
   };
 
   const renderFileInMessage = (file: FileAttachment) => {
@@ -1390,7 +1518,7 @@ function AgentWorkspace({ division, agent }: {
                       {msg.files.map((file) => renderFileInMessage(file))}
                     </div>
                   )}
-                  <div className="whitespace-pre-wrap break-words">
+                  <div className="break-words">
                     {renderMessageContent(msg.content)}
                   </div>
                 </div>
