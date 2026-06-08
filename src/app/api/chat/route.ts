@@ -43,6 +43,9 @@ Key behaviors:
 - For documents: summarize, analyze, and provide insights based on the content
 ${webSearch ? `- Web search is ENABLED. When you have search results, incorporate them naturally into your response. Always cite your sources by including the URL. Format links as [Source Name](URL). Be transparent about what information comes from search results versus your training data.` : ""}`;
 
+    // Track if any message contains images — we need createVision for that
+    let hasImages = false;
+
     // Build messages with file content support
     const chatMessages = [
       { role: "system" as const, content: systemPrompt },
@@ -62,6 +65,7 @@ ${webSearch ? `- Web search is ENABLED. When you have search results, incorporat
 
           // If there are images, use multimodal format
           if (imageFiles.length > 0) {
+            hasImages = true;
             const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
             
             if (textContent.trim()) {
@@ -138,13 +142,25 @@ ${webSearch ? `- Web search is ENABLED. When you have search results, incorporat
       ? [chatMessages[0], ...chatMessages.slice(-(MAX_HISTORY))]
       : chatMessages;
 
-    const completion = await zai.chat.completions.create({
-      messages: trimmedMessages as Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
-      temperature: 0.7,
-      max_tokens: 32768,
-    });
+    // 🔑 KEY FIX: Use createVision() when messages contain images, create() otherwise
+    let reply: string;
 
-    let reply = completion.choices[0]?.message?.content || "I'm here to help! Could you rephrase your question?";
+    if (hasImages) {
+      // Vision API supports multimodal content (text + images)
+      const completion = await zai.chat.completions.createVision({
+        messages: trimmedMessages as Array<{ role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }>,
+        thinking: { type: "disabled" },
+      });
+      reply = completion.choices[0]?.message?.content || "I'm here to help! Could you rephrase your question?";
+    } else {
+      // Regular text-only chat
+      const completion = await zai.chat.completions.create({
+        messages: trimmedMessages as Array<{ role: "system" | "user" | "assistant"; content: string }>,
+        temperature: 0.7,
+        max_tokens: 32768,
+      });
+      reply = completion.choices[0]?.message?.content || "I'm here to help! Could you rephrase your question?";
+    }
     
     // Add search indicator if web search was used and results were found
     if (webSearch && searchContext) {
@@ -159,5 +175,5 @@ ${webSearch ? `- Web search is ENABLED. When you have search results, incorporat
   }
 }
 
-// Increase timeout for chat with web search (can take up to 60s)
+// Increase timeout for chat with web search and vision (can take up to 60s)
 export const maxDuration = 60;
